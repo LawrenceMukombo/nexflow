@@ -13,22 +13,7 @@ import {
 } from 'antd';
 import { 
   SearchOutlined, 
-  CloudServerOutlined, 
-  PartitionOutlined, 
-  ApartmentOutlined, 
-  BranchesOutlined, 
-  SafetyCertificateOutlined, 
-  DesktopOutlined, 
-  WifiOutlined, 
-  DatabaseOutlined, 
-  PrinterOutlined, 
-  PhoneOutlined,
   PlusOutlined,
-  InboxOutlined,
-  VideoCameraOutlined,
-  LockOutlined,
-  ThunderboltOutlined,
-  TableOutlined,
   BookOutlined,
   AppstoreAddOutlined,
   CheckSquareOutlined,
@@ -36,6 +21,7 @@ import {
 } from '@ant-design/icons';
 import { NETWORK_COMPONENT_CATALOG } from '@omniflow/network-engine';
 import { useGraphStore } from '../store/graphStore';
+import { ComponentIcon } from './ComponentIcon';
 
 const { Text } = Typography;
 
@@ -71,70 +57,7 @@ export const Palette: React.FC = () => {
     setBatchSelectedTypes(prev => [...prev, type]);
   };
 
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'ISP_FEED': return <CloudServerOutlined style={{ color: '#06b6d4', fontSize: 18 }} />;
-      case 'ROUTER_ENTERPRISE':
-      case 'ROUTER_CORE_BGP':
-      case 'ROUTER_BRANCH':
-      case 'ROUTER_INDUSTRIAL':
-      case 'CISCO_ISR_4451':
-        return <PartitionOutlined style={{ color: '#38bdf8', fontSize: 18 }} />;
-      case 'FIREWALL_UTM':
-      case 'FIREWALL_HA_CLUSTER':
-      case 'FIREWALL_EDGE':
-      case 'FORTIGATE_100F':
-        return <SafetyCertificateOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
-      case 'SWITCH_CORE_L3':
-      case 'SWITCH_AGGREGATION_10G':
-      case 'CISCO_CATALYST_9500':
-        return <ApartmentOutlined style={{ color: '#818cf8', fontSize: 18 }} />;
-      case 'SWITCH_POE_24':
-      case 'SWITCH_POE_48':
-      case 'SWITCH_MULTIGIG_24':
-      case 'SWITCH_DESKTOP_8P':
-      case 'SWITCH_INDUSTRIAL_DIN':
-      case 'CISCO_CATALYST_9300':
-      case 'UNIFI_PRO_24_POE':
-      case 'FORTISWITCH_248F_FPOE':
-      case 'MOXA_EDS_510E':
-        return <BranchesOutlined style={{ color: '#10b981', fontSize: 18 }} />;
-      case 'ACCESS_POINT_WIFI6':
-      case 'ACCESS_POINT_OUTDOOR':
-      case 'ACCESS_POINT_INWALL':
-      case 'WIRELESS_PTP_BRIDGE':
-      case 'WLC_CONTROLLER':
-      case 'CISCO_CATALYST_9130AX':
-      case 'UNIFI_U6_PRO':
-      case 'FORTIAP_431F':
-        return <WifiOutlined style={{ color: '#f59e0b', fontSize: 18 }} />;
-      case 'SERVER_APP':
-      case 'STORAGE_NAS_SAN':
-      case 'NVR_ENTERPRISE_32CH':
-        return <DatabaseOutlined style={{ color: '#6366f1', fontSize: 18 }} />;
-      case 'RACK_CABINET_42U':
-      case 'RACK_WALLMOUNT_12U':
-        return <InboxOutlined style={{ color: '#94a3b8', fontSize: 18 }} />;
-      case 'PATCH_PANEL_24P':
-      case 'FIBER_PATCH_PANEL':
-        return <TableOutlined style={{ color: '#0284c7', fontSize: 18 }} />;
-      case 'UPS_ONLINE_3KVA':
-      case 'SMART_PDU_RACK':
-        return <ThunderboltOutlined style={{ color: '#eab308', fontSize: 18 }} />;
-      case 'CCTV_CAMERA_PTZ':
-      case 'CONFERENCE_BAR':
-      case 'UNIFI_PROTECT_G5_BULLET':
-      case 'CAMERA_FISHEYE_360':
-        return <VideoCameraOutlined style={{ color: '#f97316', fontSize: 18 }} />;
-      case 'ACCESS_CONTROL_PANEL':
-      case 'ACCESS_CONTROLLER_4DOOR':
-        return <LockOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
-      case 'WORKSTATION_PC': return <DesktopOutlined style={{ color: '#94a3b8', fontSize: 18 }} />;
-      case 'IP_PHONE_VOIP': return <PhoneOutlined style={{ color: '#ec4899', fontSize: 18 }} />;
-      case 'NETWORK_PRINTER': return <PrinterOutlined style={{ color: '#14b8a6', fontSize: 18 }} />;
-      default: return <ApartmentOutlined style={{ color: '#94a3b8', fontSize: 18 }} />;
-    }
-  };
+  const getIcon = (type: string) => <ComponentIcon type={type} size={18} />;
 
   const allItems = Object.values(NETWORK_COMPONENT_CATALOG);
   const filteredItems = allItems.filter(item => 

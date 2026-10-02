@@ -30,6 +30,7 @@ import {
   SaveOutlined
 } from '@ant-design/icons';
 import { ComponentPort, EngineeringComponent, EngineeringConnection } from '@omniflow/shared-types';
+import { ComponentIcon } from './ComponentIcon';
 
 export const Canvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1684,6 +1685,7 @@ export const Canvas: React.FC = () => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ComponentIcon type={node.type} domain={node.domain} size={15} />
                   <Tag 
                     color={
                       isFailed 

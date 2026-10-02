@@ -23,6 +23,7 @@ import {
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
+import { NexFlowBrandIcon } from './ComponentIcon';
 
 export const TopNav: React.FC = () => {
   const {
@@ -77,26 +78,16 @@ export const TopNav: React.FC = () => {
     >
       {/* Brand & Project Info */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              background: 'linear-gradient(135deg, #0ea5e9, #6366f1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              fontWeight: 800,
-              fontSize: 14
-            }}
-          >
-            Ω
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <NexFlowBrandIcon size={32} />
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', color: '#f8fafc', lineHeight: 1.1 }}>
+              Nex<span style={{ color: '#38bdf8' }}>Flow</span>
+            </div>
+            <div style={{ fontSize: 9.5, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em' }}>
+              ENGINEERING SIMULATION
+            </div>
           </div>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em', color: '#f8fafc' }}>
-            Omni<span style={{ color: '#38bdf8' }}>Flow</span>
-          </span>
         </div>
 
         <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />

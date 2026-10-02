@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, InputNumber, Button, Divider, message, Tag } from 'antd';
 import { 
-  EditOutlined, 
   CopyOutlined, 
   DeleteOutlined, 
   CheckCircleOutlined,
@@ -10,6 +9,7 @@ import {
   TableOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
+import { ComponentIcon } from './ComponentIcon';
 
 export const QuickEditModal: React.FC = () => {
   const {
@@ -96,7 +96,9 @@ export const QuickEditModal: React.FC = () => {
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f8fafc' }}>
-          <EditOutlined style={{ color: '#38bdf8' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 6, background: '#1e293b' }}>
+            <ComponentIcon type={node.type} domain={node.domain} size={18} />
+          </div>
           <span>Edit Component: {node.tag}</span>
           <Tag color="#0284c7" style={{ marginLeft: 8 }}>{node.type}</Tag>
         </div>

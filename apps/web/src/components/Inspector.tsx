@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { CABLE_CATALOG } from '@omniflow/network-engine';
+import { ComponentIcon } from './ComponentIcon';
 
 const { Text, Title } = Typography;
 
@@ -211,6 +212,7 @@ export const Inspector: React.FC = () => {
       {/* Node Title & Status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ComponentIcon type={selectedNode!.type} domain={selectedNode!.domain} size={18} />
           <Tag color="cyan" style={{ margin: 0, fontWeight: 600 }}>{selectedNode!.tag}</Tag>
           <Title level={5} style={{ color: '#f8fafc', margin: 0, fontSize: 14 }}>
             {selectedNode!.name.split('(')[0]}
