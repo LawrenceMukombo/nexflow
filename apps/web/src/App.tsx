@@ -18,6 +18,7 @@ import { QuickEditModal } from './components/QuickEditModal';
 import { DesignReportModal } from './components/DesignReportModal';
 import { VersionDiffModal } from './components/VersionDiffModal';
 import { ExportCenterModal } from './components/ExportCenterModal';
+import { DeviceCliModal } from './components/DeviceCliModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -104,6 +105,7 @@ export const App: React.FC = () => {
         <DesignReportModal />
         <VersionDiffModal />
         <ExportCenterModal />
+        <DeviceCliModal />
       </div>
     </ConfigProvider>
     </>

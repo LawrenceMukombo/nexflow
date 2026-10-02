@@ -33,7 +33,8 @@ import {
   DollarOutlined,
   HistoryOutlined,
   ExportOutlined,
-  BookOutlined
+  BookOutlined,
+  CodeOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -87,7 +88,8 @@ export const EnterpriseMenuBar: React.FC = () => {
     openVersionDiffModal,
     openExportCenterModal,
     toggleValidationDrawer,
-    validationIssues
+    validationIssues,
+    openCliModal
   } = useGraphStore();
 
   const allNodes = Object.values(graph.nodes);
@@ -514,6 +516,12 @@ export const EnterpriseMenuBar: React.FC = () => {
       ]
     },
     { type: 'divider' },
+    {
+      key: 'tool-cli-cmd',
+      icon: <CodeOutlined style={{ color: '#34d399' }} />,
+      label: 'Command Prompt (CMD Diagnostics Console)...',
+      onClick: () => openCliModal()
+    },
     {
       key: 'tool-wizard',
       icon: <BuildOutlined style={{ color: '#0284c7' }} />,

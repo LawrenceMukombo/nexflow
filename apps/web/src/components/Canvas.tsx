@@ -27,7 +27,8 @@ import {
   TableOutlined,
   SnippetsOutlined,
   AppstoreOutlined,
-  SaveOutlined
+  SaveOutlined,
+  CodeOutlined
 } from '@ant-design/icons';
 import { ComponentPort, EngineeringComponent, EngineeringConnection } from '@omniflow/shared-types';
 import { checkNodeNetworkConfig } from '@omniflow/network-engine';
@@ -71,6 +72,7 @@ export const Canvas: React.FC = () => {
     pasteCopiedNodes,
     copiedNodeIds,
     openQuickEditModal,
+    openCliModal,
     updateConnectionCableType,
     updateConnectionLength,
     removeConnection,
@@ -564,6 +566,12 @@ export const Canvas: React.FC = () => {
         icon: <EditOutlined style={{ color: '#38bdf8' }} />,
         label: <span style={{ fontWeight: 600 }}>Edit Properties...</span>,
         onClick: () => openQuickEditModal(node.id)
+      },
+      {
+        key: 'cli-terminal',
+        icon: <CodeOutlined style={{ color: '#34d399' }} />,
+        label: <span style={{ fontWeight: 600 }}>Command Prompt (CMD Console)...</span>,
+        onClick: () => openCliModal(node.id)
       },
       {
         key: 'toggle-status',

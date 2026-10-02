@@ -17,10 +17,13 @@ import {
   SlidersOutlined, 
   ThunderboltOutlined,
   SendOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  FullscreenOutlined,
+  ClearOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { CABLE_CATALOG, checkNodeNetworkConfig } from '@omniflow/network-engine';
+import { executeCliCommand } from '../utils/cliNetworkEngine';
 import { ComponentIcon } from './ComponentIcon';
 
 const { Text, Title } = Typography;
@@ -37,10 +40,14 @@ export const Inspector: React.FC = () => {
     toggleConnectionFault,
     updateConnectionLength,
     updateConnectionCableType,
-    sendDirectedPing
+    sendDirectedPing,
+    openCliModal
   } = useGraphStore();
 
   const [pingTargetId, setPingTargetId] = useState<string | null>(null);
+  const [cmdLines, setCmdLines] = useState<string[]>([]);
+  const [activeCmd, setActiveCmd] = useState<string>('');
+  const [isCmdStreaming, setIsCmdStreaming] = useState(false);
 
   const selectedNode = selectedNodeId ? graph.nodes[selectedNodeId] : null;
   const selectedConn = selectedConnectionId ? graph.connections[selectedConnectionId] : null;
@@ -199,6 +206,37 @@ export const Inspector: React.FC = () => {
   const netStatus = selectedNode ? checkNodeNetworkConfig(selectedNode, graph) : null;
   const isNetMisconfigured = netStatus ? !netStatus.canConnect : false;
 
+  const runInspectorCommand = (cmdText: string) => {
+    if (!selectedNode) return;
+    setActiveCmd(cmdText);
+    const result = executeCliCommand(graph, selectedNode.id, cmdText);
+
+    if (result.targetNodeId && cmdText.toLowerCase().startsWith('ping')) {
+      sendDirectedPing(selectedNode.id, result.targetNodeId);
+    }
+
+    if (result.steps && result.steps.length > 0) {
+      setIsCmdStreaming(true);
+      setCmdLines([]);
+      const accumulated: string[] = [];
+      let stepIndex = 0;
+
+      const streamNext = () => {
+        if (stepIndex >= result.steps!.length) {
+          setIsCmdStreaming(false);
+          return;
+        }
+        accumulated.push(result.steps![stepIndex].text);
+        stepIndex++;
+        setCmdLines([...accumulated]);
+        setTimeout(streamNext, result.steps![stepIndex - 1]?.delayMs || 150);
+      };
+      streamNext();
+    } else {
+      setCmdLines(result.outputLines);
+    }
+  };
+
   return (
     <div
       style={{
@@ -286,12 +324,43 @@ export const Inspector: React.FC = () => {
 
       <Divider style={{ borderColor: '#334155', margin: '14px 0' }} />
 
-      {/* Interactive Point-to-Point Ping Tool */}
-      <div style={{ padding: 10, backgroundColor: '#1e293b', borderRadius: 6, marginBottom: 12 }}>
-        <Text style={{ fontSize: 11, color: '#38bdf8', fontWeight: 600 }}>TRANSMIT PING (ICMP)</Text>
-        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+      {/* Interactive Windows Command Prompt Ping & Diagnostics */}
+      <div style={{ padding: 10, backgroundColor: '#1e293b', borderRadius: 6, marginBottom: 12, border: '1px solid #334155' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{
+              width: 14,
+              height: 14,
+              backgroundColor: '#000000',
+              border: '1px solid #64748b',
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 8,
+              fontWeight: 700,
+              color: '#ffffff',
+              fontFamily: 'Consolas, monospace'
+            }}>
+              &gt;_
+            </div>
+            <Text style={{ fontSize: 11, color: '#38bdf8', fontWeight: 600 }}>COMMAND PROMPT (CMD)</Text>
+          </div>
+          <Button
+            size="small"
+            type="link"
+            icon={<FullscreenOutlined />}
+            onClick={() => openCliModal(selectedNode!.id)}
+            style={{ fontSize: 11, padding: '0 4px', height: 'auto', color: '#38bdf8' }}
+          >
+            Full CMD
+          </Button>
+        </div>
+
+        {/* Target Select & Action Buttons */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
           <Select
-            placeholder="Select target device..."
+            placeholder="Select target to ping..."
             value={pingTargetId}
             onChange={(val) => setPingTargetId(val)}
             style={{ flex: 1 }}
@@ -299,7 +368,7 @@ export const Inspector: React.FC = () => {
             options={Object.values(graph.nodes)
               .filter(n => n.id !== selectedNode!.id)
               .map(n => ({
-                label: `${n.tag} (${n.name.split('(')[0]})`,
+                label: `${n.tag} (${(n.properties.ipAddress || n.properties.lanIp || n.name) as string})`,
                 value: n.id
               }))}
           />
@@ -307,23 +376,169 @@ export const Inspector: React.FC = () => {
             size="small"
             type="primary"
             icon={<SendOutlined />}
-            disabled={!pingTargetId || isNetMisconfigured}
+            loading={isCmdStreaming}
+            disabled={!pingTargetId}
             onClick={() => {
               if (!pingTargetId) return;
-              if (isNetMisconfigured) {
-                message.error(`Transmission blocked: ${selectedNode!.name} has wrong IP settings (${netStatus?.statusText}).`);
-                return;
-              }
-              const reached = sendDirectedPing(selectedNode!.id, pingTargetId);
-              if (reached) {
-                message.success('Packet dispatched! Routing along active path...');
-              } else {
-                message.error('Destination unreachable! Target device offline or subnet mismatch.');
-              }
+              const targetNode = graph.nodes[pingTargetId];
+              const targetIp = (targetNode?.properties.ipAddress || targetNode?.properties.lanIp || pingTargetId) as string;
+              runInspectorCommand(`ping ${targetIp}`);
             }}
           >
             Ping
           </Button>
+        </div>
+
+        {/* Diagnostic Command Shortcuts */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+          <button
+            onClick={() => runInspectorCommand('ipconfig')}
+            disabled={isCmdStreaming}
+            style={{
+              background: '#0f172a',
+              border: '1px solid #334155',
+              color: '#a78bfa',
+              borderRadius: 3,
+              padding: '2px 6px',
+              fontSize: 10,
+              fontFamily: 'Consolas, monospace',
+              cursor: isCmdStreaming ? 'not-allowed' : 'pointer'
+            }}
+          >
+            ipconfig
+          </button>
+          <button
+            onClick={() => runInspectorCommand('ipconfig /all')}
+            disabled={isCmdStreaming}
+            style={{
+              background: '#0f172a',
+              border: '1px solid #334155',
+              color: '#a78bfa',
+              borderRadius: 3,
+              padding: '2px 6px',
+              fontSize: 10,
+              fontFamily: 'Consolas, monospace',
+              cursor: isCmdStreaming ? 'not-allowed' : 'pointer'
+            }}
+          >
+            ipconfig /all
+          </button>
+          <button
+            onClick={() => runInspectorCommand('ifconfig')}
+            disabled={isCmdStreaming}
+            style={{
+              background: '#0f172a',
+              border: '1px solid #334155',
+              color: '#34d399',
+              borderRadius: 3,
+              padding: '2px 6px',
+              fontSize: 10,
+              fontFamily: 'Consolas, monospace',
+              cursor: isCmdStreaming ? 'not-allowed' : 'pointer'
+            }}
+          >
+            ifconfig
+          </button>
+          {pingTargetId && (
+            <button
+              onClick={() => {
+                const targetNode = graph.nodes[pingTargetId];
+                const targetIp = (targetNode?.properties.ipAddress || targetNode?.properties.lanIp || pingTargetId) as string;
+                runInspectorCommand(`tracert ${targetIp}`);
+              }}
+              disabled={isCmdStreaming}
+              style={{
+                background: '#0f172a',
+                border: '1px solid #334155',
+                color: '#fbbf24',
+                borderRadius: 3,
+                padding: '2px 6px',
+                fontSize: 10,
+                fontFamily: 'Consolas, monospace',
+                cursor: isCmdStreaming ? 'not-allowed' : 'pointer'
+              }}
+            >
+              tracert
+            </button>
+          )}
+          {cmdLines.length > 0 && (
+            <button
+              onClick={() => {
+                setCmdLines([]);
+                setActiveCmd('');
+              }}
+              style={{
+                background: '#0f172a',
+                border: '1px solid #334155',
+                color: '#94a3b8',
+                borderRadius: 3,
+                padding: '2px 6px',
+                fontSize: 10,
+                fontFamily: 'Consolas, monospace',
+                cursor: 'pointer',
+                marginLeft: 'auto'
+              }}
+            >
+              <ClearOutlined /> cls
+            </button>
+          )}
+        </div>
+
+        {/* Embedded Authentic CMD Console Display */}
+        <div
+          style={{
+            backgroundColor: '#0c0c0c',
+            border: '1px solid #000000',
+            borderRadius: 4,
+            padding: '8px 10px',
+            maxHeight: 180,
+            overflowY: 'auto',
+            fontFamily: "'Consolas', 'Lucida Console', 'Courier New', monospace",
+            fontSize: 11,
+            lineHeight: 1.4,
+            color: '#cccccc',
+            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.6)'
+          }}
+        >
+          {activeCmd ? (
+            <div>
+              <div style={{ color: '#f1f1f1', marginBottom: 4 }}>
+                <span>C:\Users\Admin&gt;</span>
+                <span style={{ color: '#38bdf8', fontWeight: 600, marginLeft: 4 }}>{activeCmd}</span>
+              </div>
+              {cmdLines.map((line, lIdx) => {
+                let color = '#cccccc';
+                if (line.includes('Reply from')) {
+                  color = line.includes('unreachable') ? '#f87171' : '#34d399';
+                } else if (line.includes('timed out') || line.includes('Lost = 4')) {
+                  color = '#f87171';
+                } else if (line.startsWith('Windows IP Configuration') || line.startsWith('Active Connections')) {
+                  color = '#38bdf8';
+                } else if (line.includes('IPv4 Address') || line.includes('Subnet Mask') || line.includes('Default Gateway')) {
+                  color = '#f8fafc';
+                } else if (line.includes('WARNING:')) {
+                  color = '#facc15';
+                }
+
+                return (
+                  <div key={lIdx} style={{ color, whiteSpace: 'pre-wrap' }}>
+                    {line}
+                  </div>
+                );
+              })}
+              {isCmdStreaming && (
+                <span style={{ display: 'inline-block', width: 6, height: 12, backgroundColor: '#38bdf8', marginLeft: 2 }} />
+              )}
+            </div>
+          ) : (
+            <div style={{ color: '#64748b' }}>
+              <div>Microsoft Windows [Version 10.0.19045]</div>
+              <div>(c) Microsoft Corporation. All rights reserved.</div>
+              <div style={{ marginTop: 4, color: '#475569' }}>
+                C:\Users\Admin&gt; <span style={{ fontStyle: 'italic' }}>Select target &amp; click Ping or ipconfig</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

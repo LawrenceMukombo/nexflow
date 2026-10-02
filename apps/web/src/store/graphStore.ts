@@ -139,6 +139,8 @@ export interface GraphState {
   isProjectsModalOpen: boolean;
   isQuickEditModalOpen: boolean;
   quickEditNodeId: string | null;
+  isCliModalOpen: boolean;
+  cliNodeId: string | null;
 
   // Milestone 3: Engineering Delivery & Governance Modals
   isDesignReportModalOpen: boolean;
@@ -200,6 +202,8 @@ export interface GraphState {
   pasteCopiedNodes: (position?: { x: number; y: number }) => void;
   openQuickEditModal: (nodeId: string) => void;
   closeQuickEditModal: () => void;
+  openCliModal: (nodeId?: string) => void;
+  closeCliModal: () => void;
   updateComponentProperties: (id: string, properties: Record<string, unknown>) => void;
   toggleComponentFault: (id: string) => void;
   
@@ -432,6 +436,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isProjectsModalOpen: false,
   isQuickEditModalOpen: false,
   quickEditNodeId: null,
+  isCliModalOpen: false,
+  cliNodeId: null,
 
   // Milestone 3: Engineering Delivery & Governance Modals
   isDesignReportModalOpen: false,
@@ -1783,6 +1789,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       });
       return { libraries: updated };
     });
+  },
+
+  openCliModal: (nodeId) => {
+    const targetId = nodeId || get().selectedNodeId;
+    set({ isCliModalOpen: true, cliNodeId: targetId });
+  },
+
+  closeCliModal: () => {
+    set({ isCliModalOpen: false, cliNodeId: null });
   },
 
   sendDirectedPing: (sourceNodeId, targetNodeId) => {
