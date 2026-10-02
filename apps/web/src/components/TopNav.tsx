@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Space, Select, Badge, Tooltip, message, Tag } from 'antd';
+import { Button, Space, Select, Badge, Tooltip, message, Tag, Dropdown } from 'antd';
 import { 
   PlayCircleFilled, 
   PauseCircleFilled, 
@@ -46,7 +46,7 @@ export const TopNav: React.FC = () => {
     simulationSpeed,
     setSimulationSpeed,
     triggerPacketBurst,
-    loadDemoTopology,
+    loadSystemDesign,
     clearCanvas,
     undo,
     redo,
@@ -233,14 +233,91 @@ export const TopNav: React.FC = () => {
           </Button>
         </Tooltip>
 
-        {/* Demo Small Office Benchmark Load */}
-        <Button
-          icon={<BranchesOutlined />}
-          onClick={loadDemoTopology}
-          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+        {/* Demo Benchmark & System Design Switcher */}
+        <Dropdown
+          menu={{
+            items: [
+              {
+                key: 'MULTI_DOMAIN',
+                icon: <BuildOutlined style={{ color: '#06b6d4' }} />,
+                label: (
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Integrated Smart Facility</span>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Network Fiber + 400V Power + 7°C Chilled Water</div>
+                  </div>
+                ),
+                onClick: () => {
+                  loadSystemDesign('MULTI_DOMAIN');
+                  message.success('Loaded Multi-Domain Facility (Simultaneous Data, Electricity & Water Flow)');
+                }
+              },
+              {
+                key: 'NETWORK',
+                icon: <BranchesOutlined style={{ color: '#38bdf8' }} />,
+                label: (
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Corporate Enterprise Network</span>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Router, UTM Firewall, Switches & Workstations</div>
+                  </div>
+                ),
+                onClick: () => {
+                  loadSystemDesign('NETWORK');
+                  message.success('Loaded Corporate Enterprise Network (Data Packets Flow)');
+                }
+              },
+              {
+                key: 'ELECTRICAL',
+                icon: <ThunderboltFilled style={{ color: '#facc15' }} />,
+                label: (
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Critical Electrical Distribution</span>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Grid Substation, Diesel Generator, ATS & 40kVA UPS</div>
+                  </div>
+                ),
+                onClick: () => {
+                  loadSystemDesign('ELECTRICAL');
+                  message.success('Loaded Critical Electrical Power System (AC Current Flow)');
+                }
+              },
+              {
+                key: 'PLUMBING',
+                icon: <TableOutlined style={{ color: '#0284c7' }} />,
+                label: (
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Data Center Chilled Water System</span>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>100-Ton Chiller, VFD Pumps, CRAH Coolers & Cooling Tower</div>
+                  </div>
+                ),
+                onClick: () => {
+                  loadSystemDesign('PLUMBING');
+                  message.success('Loaded Chilled Water Cooling System (Fluid/Water Flow)');
+                }
+              },
+              {
+                key: 'CCTV',
+                icon: <BuildOutlined style={{ color: '#d946ef' }} />,
+                label: (
+                  <div>
+                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>CCTV & Perimeter Surveillance</span>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>4K PTZ IP Cameras, PoE Switch & 64-Ch NVR</div>
+                  </div>
+                ),
+                onClick: () => {
+                  loadSystemDesign('CCTV');
+                  message.success('Loaded CCTV Video Surveillance System (RTSP Video Streams)');
+                }
+              }
+            ]
+          }}
+          placement="bottomRight"
         >
-          Small Office Demo
-        </Button>
+          <Button
+            icon={<BranchesOutlined style={{ color: '#38bdf8' }} />}
+            style={{ backgroundColor: '#1e293b', borderColor: '#0284c7', color: '#f8fafc', fontWeight: 600 }}
+          >
+            System Designs ▾
+          </Button>
+        </Dropdown>
 
         {/* Simulation Controls */}
         <Space.Compact>

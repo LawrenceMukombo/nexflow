@@ -267,3 +267,279 @@ export function generateWizardTopology(options: NetworkWizardOptions): Engineeri
     }
   };
 }
+
+/**
+ * Generates an Enterprise Electrical Power Distribution System
+ * (Grid Utility Transformer, Standby Generator, ATS, 40kVA UPS, PDU & Server Loads)
+ */
+export function generateElectricalFacilityTopology(name?: string): EngineeringGraph {
+  const designId = `design_elec_${Date.now()}`;
+  const nodes: Record<string, ReturnType<typeof createComponentInstance>> = {};
+  const connections: Record<string, ReturnType<typeof createConnectionInstance>> = {};
+
+  function addNode(type: string, tag: string, x: number, y: number) {
+    const node = createComponentInstance(type, designId, { x, y }, tag);
+    nodes[node.id] = node;
+    return node;
+  }
+
+  function link(
+    srcNode: ReturnType<typeof createComponentInstance>,
+    srcPortIdx: number,
+    tgtNode: ReturnType<typeof createComponentInstance>,
+    tgtPortIdx: number,
+    cableType: string = 'POWER_3PHASE_400V',
+    distanceMeters: number = 20
+  ) {
+    const srcPort = srcNode.ports[srcPortIdx];
+    const tgtPort = tgtNode.ports[tgtPortIdx];
+    if (!srcPort || !tgtPort) return;
+
+    const conn = createConnectionInstance(
+      designId,
+      srcNode.id,
+      srcPort.id,
+      tgtNode.id,
+      tgtPort.id,
+      cableType,
+      distanceMeters
+    );
+    srcPort.occupiedByConnectionId = conn.id;
+    tgtPort.occupiedByConnectionId = conn.id;
+    connections[conn.id] = conn;
+  }
+
+  // Primary Utility Transformer & Standby Diesel Generator
+  const xfmr = addNode('GRID_TRANSFORMER', 'XFMR-01', 60, 140);
+  const gen = addNode('DIESEL_GENERATOR', 'GEN-01', 60, 360);
+
+  // Automatic Transfer Switch (ATS)
+  const ats = addNode('ATS_SWITCH', 'ATS-MAIN', 340, 250);
+  link(xfmr, 0, ats, 0, 'POWER_3PHASE_400V', 35);
+  link(gen, 0, ats, 1, 'POWER_3PHASE_400V', 40);
+
+  // Online Double-Conversion UPS System
+  const ups = addNode('UPS_ENTERPRISE', 'UPS-40KVA', 600, 250);
+  link(ats, 2, ups, 0, 'POWER_3PHASE_400V', 15);
+
+  // Rooftop Solar PV & Inverter Feed
+  const solar = addNode('SOLAR_PV_ARRAY', 'PV-ROOF', 340, 480);
+  const inv = addNode('SOLAR_INVERTER', 'INV-SOLAR', 600, 480);
+  link(solar, 0, inv, 0, 'SOLAR_DC_STRING', 25);
+  link(solar, 1, inv, 1, 'SOLAR_DC_STRING', 25);
+
+  // Intelligent Metered Rack PDUs (Feed A & Feed B)
+  const pduA = addNode('PDU_RACK_32A', 'PDU-RACK-01A', 860, 140);
+  const pduB = addNode('PDU_RACK_32A', 'PDU-RACK-01B', 860, 360);
+  link(ups, 1, pduA, 0, 'POWER_1PHASE_230V', 20);
+  link(ups, 2, pduB, 0, 'POWER_1PHASE_230V', 20);
+
+  // Server Loads Connected to PDUs
+  const srv1 = addNode('SERVER_APP', 'SRV-DB-PROD-01', 1120, 140);
+  const srv2 = addNode('SERVER_APP', 'SRV-APP-PROD-02', 1120, 360);
+  link(pduA, 1, srv1, 0, 'POWER_1PHASE_230V', 3);
+  link(pduB, 2, srv2, 0, 'POWER_1PHASE_230V', 3);
+
+  return {
+    schemaVersion: '1.0',
+    designId,
+    name: name || 'Critical Facility Electrical Distribution System',
+    domain: 'ELECTRICAL',
+    nodes,
+    connections,
+    metadata: {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: '1.0.0',
+      author: 'OmniFlow Electrical Engineering Wizard'
+    }
+  };
+}
+
+/**
+ * Generates a Precision Data Center Chilled Water & Cooling System
+ * (Chiller, Dual Circulation Pumps, In-Row CRAH Coolers, Buffer Tank & Cooling Tower)
+ */
+export function generateChilledWaterCoolingTopology(name?: string): EngineeringGraph {
+  const designId = `design_plumb_${Date.now()}`;
+  const nodes: Record<string, ReturnType<typeof createComponentInstance>> = {};
+  const connections: Record<string, ReturnType<typeof createConnectionInstance>> = {};
+
+  function addNode(type: string, tag: string, x: number, y: number) {
+    const node = createComponentInstance(type, designId, { x, y }, tag);
+    nodes[node.id] = node;
+    return node;
+  }
+
+  function link(
+    srcNode: ReturnType<typeof createComponentInstance>,
+    srcPortIdx: number,
+    tgtNode: ReturnType<typeof createComponentInstance>,
+    tgtPortIdx: number,
+    cableType: string = 'PIPE_CHILLED_SUPPLY',
+    distanceMeters: number = 25
+  ) {
+    const srcPort = srcNode.ports[srcPortIdx];
+    const tgtPort = tgtNode.ports[tgtPortIdx];
+    if (!srcPort || !tgtPort) return;
+
+    const conn = createConnectionInstance(
+      designId,
+      srcNode.id,
+      srcPort.id,
+      tgtNode.id,
+      tgtPort.id,
+      cableType,
+      distanceMeters
+    );
+    srcPort.occupiedByConnectionId = conn.id;
+    tgtPort.occupiedByConnectionId = conn.id;
+    connections[conn.id] = conn;
+  }
+
+  // Municipal Water Supply Meter & Demarcation
+  const meter = addNode('WATER_MAIN_METER', 'WTR-MAIN', 60, 360);
+
+  // Rooftop Evaporative Cooling Tower
+  const tower = addNode('COOLING_TOWER_ROOF', 'CT-ROOF-01', 60, 140);
+
+  // 100-Ton Central Magnetic Liquid Chiller (7°C Cold Supply)
+  const chiller = addNode('WATER_CHILLER_CENTRAL', 'CHLR-CENTRAL-01', 340, 240);
+  link(tower, 1, chiller, 1, 'PIPE_CHILLED_RETURN', 40);
+
+  // Dual Hydronic VFD Circulation Pumps
+  const pump = addNode('DUAL_CIRCULATION_PUMP', 'PMP-CHW-PRIMARY', 620, 240);
+  link(chiller, 0, pump, 0, 'PIPE_CHILLED_SUPPLY', 15);
+
+  // 5,000L Chilled Water Buffer Storage Tank
+  const tank = addNode('BUFFER_STORAGE_TANK', 'TNK-CHW-BUFFER', 880, 120);
+  link(pump, 1, tank, 0, 'PIPE_CHILLED_SUPPLY', 20);
+
+  // Precision In-Row CRAH Coolers (Server Room Aisles)
+  const crah1 = addNode('CRAC_PRECISION_COOLER', 'CRAH-ROW-A', 1140, 120);
+  const crah2 = addNode('CRAC_PRECISION_COOLER', 'CRAH-ROW-B', 1140, 340);
+  link(tank, 1, crah1, 0, 'PIPE_CHILLED_SUPPLY', 15);
+  link(pump, 1, crah2, 0, 'PIPE_CHILLED_SUPPLY', 25);
+
+  // Return Line back to Chiller
+  link(crah1, 1, chiller, 1, 'PIPE_CHILLED_RETURN', 65);
+  link(crah2, 1, chiller, 1, 'PIPE_CHILLED_RETURN', 60);
+
+  // Condensate Drain from CRAH to Municipal Drainage
+  link(crah1, 2, meter, 0, 'PIPE_CONDENSATE', 50);
+
+  return {
+    schemaVersion: '1.0',
+    designId,
+    name: name || 'Data Center Chilled Water & Liquid Cooling System',
+    domain: 'PLUMBING',
+    nodes,
+    connections,
+    metadata: {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: '1.0.0',
+      author: 'OmniFlow HVAC & Plumbing Engineering Wizard'
+    }
+  };
+}
+
+/**
+ * Generates an Integrated Multi-Domain Smart Facility Design
+ * (Simultaneous Network 10G Fiber + 400V/230V Electrical + 7°C Chilled Water Cooling Flow!)
+ */
+export function generateMultiDomainSmartFacilityTopology(name?: string): EngineeringGraph {
+  const designId = `design_facility_${Date.now()}`;
+  const nodes: Record<string, ReturnType<typeof createComponentInstance>> = {};
+  const connections: Record<string, ReturnType<typeof createConnectionInstance>> = {};
+
+  function addNode(type: string, tag: string, x: number, y: number) {
+    const node = createComponentInstance(type, designId, { x, y }, tag);
+    nodes[node.id] = node;
+    return node;
+  }
+
+  function link(
+    srcNode: ReturnType<typeof createComponentInstance>,
+    srcPortIdx: number,
+    tgtNode: ReturnType<typeof createComponentInstance>,
+    tgtPortIdx: number,
+    cableType: string,
+    distanceMeters: number = 20
+  ) {
+    const srcPort = srcNode.ports[srcPortIdx];
+    const tgtPort = tgtNode.ports[tgtPortIdx];
+    if (!srcPort || !tgtPort) return;
+
+    const conn = createConnectionInstance(
+      designId,
+      srcNode.id,
+      srcPort.id,
+      tgtNode.id,
+      tgtPort.id,
+      cableType,
+      distanceMeters
+    );
+    srcPort.occupiedByConnectionId = conn.id;
+    tgtPort.occupiedByConnectionId = conn.id;
+    connections[conn.id] = conn;
+  }
+
+  // --- 1. NETWORK DOMAIN ---
+  const isp = addNode('ISP_FEED', 'ISP-FIBER', 60, 80);
+  const fw = addNode('FIREWALL_UTM', 'FW-BORDER', 300, 80);
+  const coreSw = addNode('SWITCH_AGGREGATION_10G', 'SW-CORE-10G', 560, 80);
+  link(isp, 0, fw, 0, 'FIBER_SM', 30);
+  link(fw, 1, coreSw, 0, 'DAC_10G', 5);
+
+  // --- 2. ELECTRICAL DOMAIN ---
+  const xfmr = addNode('GRID_TRANSFORMER', 'XFMR-UTILITY', 60, 270);
+  const ups = addNode('UPS_ENTERPRISE', 'UPS-40KVA', 300, 270);
+  const pdu = addNode('PDU_RACK_32A', 'PDU-POD-A', 560, 270);
+  link(xfmr, 0, ups, 0, 'POWER_3PHASE_400V', 30);
+  link(ups, 1, pdu, 0, 'POWER_1PHASE_230V', 15);
+
+  // --- 3. COOLING & FLUID DOMAIN ---
+  const chiller = addNode('WATER_CHILLER_CENTRAL', 'CHLR-POD-01', 60, 460);
+  const pump = addNode('DUAL_CIRCULATION_PUMP', 'PMP-CHW-01', 300, 460);
+  const crah = addNode('CRAC_PRECISION_COOLER', 'CRAH-INROW-01', 560, 460);
+  link(chiller, 0, pump, 0, 'PIPE_CHILLED_SUPPLY', 12);
+  link(pump, 1, crah, 0, 'PIPE_CHILLED_SUPPLY', 18);
+  link(crah, 1, chiller, 1, 'PIPE_CHILLED_RETURN', 45);
+
+  // --- 4. INTEGRATED HYPERSCALE SERVER RACK (Receives All 3 Domains!) ---
+  const hyperRack = addNode('RACK_HYPERSCALE_42U', 'RACK-AI-POD-01', 880, 250);
+
+  // Network: 10G Fiber Link from Core Switch to Rack
+  link(coreSw, 2, hyperRack, 0, 'FIBER_SM', 25);
+
+  // Electrical: 230V AC Power Feed from PDU to Rack
+  link(pdu, 3, hyperRack, 2, 'POWER_1PHASE_230V', 6);
+
+  // Cooling: Chilled Water In and Out between CRAH/Chiller loop and Rack
+  link(crah, 0, hyperRack, 4, 'PIPE_CHILLED_SUPPLY', 10);
+  link(hyperRack, 5, chiller, 1, 'PIPE_CHILLED_RETURN', 50);
+
+  // High-Performance Compute Cluster
+  const srvA = addNode('SERVER_APP', 'SRV-GPU-CLUSTER-01', 1140, 160);
+  const srvB = addNode('SERVER_APP', 'SRV-GPU-CLUSTER-02', 1140, 360);
+  link(coreSw, 3, srvA, 0, 'CAT6A', 15);
+  link(coreSw, 4, srvB, 0, 'CAT6A', 15);
+  link(pdu, 1, srvA, 0, 'POWER_1PHASE_230V', 4);
+  link(pdu, 2, srvB, 0, 'POWER_1PHASE_230V', 4);
+
+  return {
+    schemaVersion: '1.0',
+    designId,
+    name: name || 'Integrated Multi-Domain Smart Data Center',
+    domain: 'MULTI_DOMAIN',
+    nodes,
+    connections,
+    metadata: {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: '1.0.0',
+      author: 'OmniFlow Multi-Disciplinary Facility Engineering'
+    }
+  };
+}

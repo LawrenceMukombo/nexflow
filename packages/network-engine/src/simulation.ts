@@ -2,7 +2,8 @@ import {
   EngineeringGraph, 
   SimulationPacket, 
   SimulationTelemetry, 
-  EngineeringConnection 
+  EngineeringConnection,
+  FlowMedium
 } from '@omniflow/shared-types';
 
 export interface RouteHop {
@@ -76,18 +77,17 @@ export function findShortestPath(
     }
   }
 
-  return null; // No route available (isolated/partitioned)
+  return null;
 }
 
 /**
  * Calculates physics-based latency for a packet on a given link
- * t_total = (Distance / speedOfLight) + (PacketSize / Bandwidth)
  */
 export function calculateLinkTransitTimeMs(
   connection: EngineeringConnection,
   packetSizeBytes: number
 ): number {
-  const speedOfLightInCopper = 200000000; // ~200,000 km/s in copper (2/3 c)
+  const speedOfLightInCopper = 200000000;
   const propagationDelayMs = (connection.lengthMeters / speedOfLightInCopper) * 1000;
   
   const bandwidthMbps = Number(connection.properties.bandwidthLimitMbps || 1000);
@@ -98,7 +98,143 @@ export function calculateLinkTransitTimeMs(
 }
 
 /**
- * Advance the simulation tick by 1 step (e.g. 50ms per tick)
+ * Spawns continuous multi-domain flow particles across active connections
+ * (Data packets, electrical current sparks, and water/fluid droplets)
+ */
+export function spawnContinuousFlowPackets(
+  graph: EngineeringGraph,
+  existingPackets: SimulationPacket[]
+): SimulationPacket[] {
+  const connections = Object.values(graph.connections);
+  if (connections.length === 0) return existingPackets;
+
+  // Count active packets per connection
+  const packetsPerConn: Record<string, number> = {};
+  for (const p of existingPackets) {
+    packetsPerConn[p.currentEdgeId] = (packetsPerConn[p.currentEdgeId] || 0) + 1;
+  }
+
+  const newPackets: SimulationPacket[] = [];
+
+  for (const conn of connections) {
+    const isFailed = !!conn.simulationState.isFailed;
+    const srcNode = graph.nodes[conn.sourceComponentId];
+    const tgtNode = graph.nodes[conn.targetComponentId];
+
+    if (isFailed || !srcNode || !tgtNode || srcNode.simulationState.isFailed || tgtNode.simulationState.isFailed) {
+      continue;
+    }
+
+    // Limit maximum simultaneous particles per connection
+    const currentCount = packetsPerConn[conn.id] || 0;
+    if (currentCount >= 2) continue;
+
+    // Determine domain & medium
+    const connType = conn.connectionType.toUpperCase();
+    let medium: FlowMedium = 'DATA';
+    let protocol = 'TCP';
+    let label = 'TCP 1500B';
+    let color = '#38bdf8';
+    let value = 1500;
+    let unit = 'B';
+
+    if (conn.domain === 'ELECTRICAL' || connType.includes('POWER') || connType.includes('AC_') || connType.includes('DC_')) {
+      medium = 'ELECTRICITY';
+      if (connType.includes('3PHASE') || connType.includes('400V')) {
+        protocol = 'AC_400V';
+        value = 28000;
+        unit = 'W';
+        label = '⚡ 400V • 40A (28 kW)';
+        color = '#eab308'; // Amber Gold
+      } else if (connType.includes('DC')) {
+        protocol = 'DC_48V';
+        value = 2400;
+        unit = 'W';
+        label = '⚡ 48V DC • 50A';
+        color = '#f97316'; // Electric Orange
+      } else {
+        protocol = 'AC_230V';
+        value = 3680;
+        unit = 'W';
+        label = '⚡ 230V • 16A (3.7 kW)';
+        color = '#fbbf24'; // Warm Gold
+      }
+    } else if (conn.domain === 'PLUMBING' || connType.includes('PIPE') || connType.includes('WATER') || connType.includes('CHILLED')) {
+      medium = 'FLUID';
+      if (connType.includes('RETURN')) {
+        protocol = 'CHILLED_WATER';
+        value = 45;
+        unit = 'L/s';
+        label = '💧 45 L/s • 14°C Return';
+        color = '#06b6d4'; // Aqua
+      } else if (connType.includes('SUPPLY') || connType.includes('CHILLED')) {
+        protocol = 'CHILLED_WATER';
+        value = 45;
+        unit = 'L/s';
+        label = '💧 45 L/s • 7°C Supply';
+        color = '#0284c7'; // Deep Blue Chilled
+      } else if (connType.includes('CONDENSATE')) {
+        protocol = 'WATER';
+        value = 2.5;
+        unit = 'L/s';
+        label = '💧 2.5 L/s Condensate';
+        color = '#38bdf8';
+      } else {
+        protocol = 'WATER';
+        value = 15;
+        unit = 'L/s';
+        label = '💧 15 L/s • 60 PSI';
+        color = '#0ea5e9';
+      }
+    } else if (conn.domain === 'SOLAR' || connType.includes('SOLAR')) {
+      medium = 'SOLAR';
+      protocol = 'SOLAR_DC';
+      value = 12500;
+      unit = 'W';
+      label = '☀️ 650V DC (12.5 kW)';
+      color = '#10b981'; // Emerald Green
+    } else if (conn.domain === 'CCTV' || connType.includes('COAX')) {
+      medium = 'VIDEO';
+      protocol = 'RTSP';
+      value = 8500;
+      unit = 'Kbps';
+      label = '📹 4K RTSP (H.265)';
+      color = '#d946ef'; // Magenta
+    } else if (connType.includes('FIBER')) {
+      medium = 'DATA';
+      protocol = 'TCP';
+      label = 'FIBER 10G (TCP)';
+      color = '#f59e0b';
+    } else {
+      medium = 'DATA';
+      const protos = ['HTTP', 'TCP', 'UDP', 'DNS', 'ICMP'];
+      protocol = protos[Math.floor(Math.random() * protos.length)];
+      label = `${protocol} ${protocol === 'ICMP' ? '64B' : '1500B'}`;
+      color = protocol === 'ICMP' ? '#a855f7' : '#38bdf8';
+    }
+
+    newPackets.push({
+      id: `flow_${conn.id}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      sourceNodeId: conn.sourceComponentId,
+      targetNodeId: conn.targetComponentId,
+      currentEdgeId: conn.id,
+      progressPercent: Math.floor(Math.random() * 20),
+      medium,
+      protocol,
+      sizeBytes: value,
+      value,
+      unit,
+      label,
+      status: 'ACTIVE',
+      color
+    });
+  }
+
+  return [...existingPackets, ...newPackets];
+}
+
+/**
+ * Advance the multi-domain simulation tick by 1 step
  */
 export function stepNetworkSimulation(
   graph: EngineeringGraph,
@@ -109,6 +245,9 @@ export function stepNetworkSimulation(
   let deliveredCount = currentState.telemetry.deliveredPackets;
   let droppedCount = currentState.telemetry.droppedPackets;
   const linkLoads: Record<string, number> = {};
+
+  let totalPowerWatts = 0;
+  let totalFluidFlowRate = 0;
 
   for (const packet of currentState.packets) {
     const conn = graph.connections[packet.currentEdgeId];
@@ -122,11 +261,19 @@ export function stepNetworkSimulation(
     }
 
     // Advance progress along connection
-    // Standard link traverse speed: ~10-25% per step
-    packet.progressPercent += 15;
+    // Standard traversal speed ~12% per step
+    const speedIncrement = packet.medium === 'ELECTRICITY' ? 16 : packet.medium === 'FLUID' ? 10 : 14;
+    packet.progressPercent += speedIncrement;
 
     // Track link load
     linkLoads[conn.id] = (linkLoads[conn.id] || 0) + 1;
+
+    // Aggregate domain metrics
+    if (packet.medium === 'ELECTRICITY' && packet.value) {
+      totalPowerWatts += packet.value;
+    } else if (packet.medium === 'FLUID' && packet.value) {
+      totalFluidFlowRate += packet.value;
+    }
 
     if (packet.progressPercent >= 100) {
       packet.status = 'DELIVERED';
@@ -140,7 +287,7 @@ export function stepNetworkSimulation(
   const linkSaturations: Record<string, number> = {};
   for (const conn of Object.values(graph.connections)) {
     const activePacketsOnLink = linkLoads[conn.id] || 0;
-    const saturation = Math.min(100, activePacketsOnLink * 12);
+    const saturation = Math.min(100, activePacketsOnLink * 15);
     linkSaturations[conn.id] = saturation;
     conn.simulationState.saturationPercent = saturation;
     conn.simulationState.isCongested = saturation > 75;
@@ -151,8 +298,12 @@ export function stepNetworkSimulation(
     activePackets: updatedPackets.length,
     deliveredPackets: deliveredCount,
     droppedPackets: droppedCount,
-    averageLatencyMs: Number((1.2 + Math.random() * 0.4).toFixed(2)),
-    throughputMbps: Number((deliveredCount * 0.85).toFixed(1)),
+    averageLatencyMs: Number((1.2 + Math.random() * 0.3).toFixed(2)),
+    throughputMbps: Number(((deliveredCount * 0.85) + 120).toFixed(1)),
+    totalPowerWatts: totalPowerWatts > 0 ? totalPowerWatts : 42500,
+    totalCurrentAmps: Number(((totalPowerWatts > 0 ? totalPowerWatts : 42500) / 230).toFixed(1)),
+    totalFluidFlowRate: totalFluidFlowRate > 0 ? totalFluidFlowRate : 48.5,
+    averagePressurePsi: 58,
     nodeLoads: {},
     linkSaturations
   };

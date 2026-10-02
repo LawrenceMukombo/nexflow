@@ -108,14 +108,20 @@ export interface ValidationIssue {
   suggestedFix?: string;
 }
 
+export type FlowMedium = 'DATA' | 'ELECTRICITY' | 'FLUID' | 'VIDEO' | 'SOLAR';
+
 export interface SimulationPacket {
   id: string;
   sourceNodeId: string;
   targetNodeId: string;
   currentEdgeId: string;
   progressPercent: number; // 0 to 100
-  protocol: 'ICMP' | 'HTTP' | 'DNS' | 'TCP' | 'UDP';
-  sizeBytes: number;
+  medium?: FlowMedium;
+  protocol?: 'ICMP' | 'HTTP' | 'DNS' | 'TCP' | 'UDP' | 'AC_400V' | 'AC_230V' | 'DC_48V' | 'CHILLED_WATER' | 'WATER' | 'RTSP' | 'SOLAR_DC' | string;
+  sizeBytes?: number;
+  value?: number;          // e.g. Watts (3500W), Amps (15.2A), Flow (4.5 L/s), PSI (55 PSI)
+  unit?: string;           // 'W', 'kW', 'A', 'V', 'L/s', 'GPM', 'PSI', 'KB'
+  label?: string;          // Human-readable flow label e.g. "230V • 14.2A", "3.8 L/s • 7°C", "TCP 1500B"
   status: 'ACTIVE' | 'CONGESTED' | 'FAILED' | 'DELIVERED';
   color?: string;
 }
@@ -127,6 +133,10 @@ export interface SimulationTelemetry {
   droppedPackets: number;
   averageLatencyMs: number;
   throughputMbps: number;
+  totalPowerWatts?: number;
+  totalCurrentAmps?: number;
+  totalFluidFlowRate?: number; // L/s
+  averagePressurePsi?: number;
   nodeLoads: Record<string, number>; // nodeId -> % load
   linkSaturations: Record<string, number>; // connectionId -> % saturation
 }
@@ -171,7 +181,7 @@ export interface PortBlueprint {
 
 export interface ComponentTemplate {
   type: string;
-  category: 'CORE' | 'SWITCHING' | 'SECURITY' | 'ENDPOINTS' | 'INFRASTRUCTURE' | 'WIRELESS';
+  category: 'CORE' | 'SWITCHING' | 'SECURITY' | 'ENDPOINTS' | 'INFRASTRUCTURE' | 'WIRELESS' | 'ELECTRICAL' | 'PLUMBING' | 'COOLING' | 'CCTV' | 'SOLAR' | 'FACILITY' | string;
   name: string;
   defaultTagPrefix: string;
   description: string;

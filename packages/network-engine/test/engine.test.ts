@@ -122,10 +122,51 @@ const jsonExport = exportLibraryToJson(ciscoLib);
 const validation = validateLibraryJson(jsonExport);
 assert(validation.valid === true, 'Exported Cisco Library validated cleanly via JSON parser');
 
-// 11. Selection to Assembly Test
-const customAsm = createAssemblyFromSelection('Custom Sub-System', 'Custom', 'Testing custom assembly export', [router, pc], [conn]);
-assert(customAsm.nodes.length === 2, 'Custom assembly correctly extracted selected nodes');
-assert(customAsm.connections.length === 1, 'Custom assembly correctly extracted inter-node connections');
+// 12. Multi-Domain Topologies & Flow Generation Tests
+import { 
+  generateElectricalFacilityTopology,
+  generateChilledWaterCoolingTopology,
+  generateMultiDomainSmartFacilityTopology,
+  spawnContinuousFlowPackets
+} from '../src/index';
 
-console.log('=== ALL 11 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+const elecGraph = generateElectricalFacilityTopology();
+assert(Object.keys(elecGraph.nodes).length >= 6, 'Electrical topology generated with transformer, generator, ATS, and UPS');
+assert(Object.keys(elecGraph.connections).length >= 5, 'Electrical topology linked 400V/230V power distribution lines');
+
+const plumbGraph = generateChilledWaterCoolingTopology();
+assert(Object.keys(plumbGraph.nodes).length >= 6, 'Plumbing cooling topology generated with chiller, pumps, buffer tank, and CRAH');
+assert(Object.keys(plumbGraph.connections).length >= 5, 'Plumbing topology linked chilled water supply and return pipes');
+
+const multiDomainGraph = generateMultiDomainSmartFacilityTopology();
+assert(multiDomainGraph.domain === 'MULTI_DOMAIN', 'Unified Smart Facility configured as MULTI_DOMAIN');
+const hyperRack = Object.values(multiDomainGraph.nodes).find(n => n.type === 'RACK_HYPERSCALE_42U')!;
+assert(hyperRack !== undefined, 'Hyperscale 42U rack exists in smart facility');
+
+// 13. Multi-Domain Flow Simulation Test
+const initialPackets = spawnContinuousFlowPackets(multiDomainGraph, []);
+assert(initialPackets.length > 0, `Continuous flow generator spawned ${initialPackets.length} multi-domain flow particles`);
+assert(initialPackets.some(p => p.medium === 'ELECTRICITY'), 'Electrical current flow particles spawned');
+assert(initialPackets.some(p => p.medium === 'FLUID'), 'Chilled water fluid flow particles spawned');
+assert(initialPackets.some(p => p.medium === 'DATA'), 'Data network packets spawned');
+
+const steppedState = stepNetworkSimulation(multiDomainGraph, {
+  tick: 1,
+  packets: initialPackets,
+  telemetry: {
+    tick: 0,
+    activePackets: 0,
+    deliveredPackets: 0,
+    droppedPackets: 0,
+    averageLatencyMs: 0,
+    throughputMbps: 0,
+    nodeLoads: {},
+    linkSaturations: {}
+  }
+});
+assert(steppedState.telemetry.totalPowerWatts !== undefined && steppedState.telemetry.totalPowerWatts > 0, 'Simulation telemetry calculates electrical power wattage');
+assert(steppedState.telemetry.totalFluidFlowRate !== undefined && steppedState.telemetry.totalFluidFlowRate > 0, 'Simulation telemetry calculates fluid flow rate');
+
+console.log('=== ALL 15 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+
 

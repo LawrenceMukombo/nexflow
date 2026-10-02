@@ -20,6 +20,10 @@ import {
   stepNetworkSimulation,
   findShortestPath,
   generateWizardTopology,
+  generateElectricalFacilityTopology,
+  generateChilledWaterCoolingTopology,
+  generateMultiDomainSmartFacilityTopology,
+  spawnContinuousFlowPackets,
   NetworkWizardOptions,
   CABLE_CATALOG,
   BUILTIN_LIBRARIES,
@@ -126,6 +130,15 @@ export interface GraphState {
   setCurrentProjectName: (name: string) => void;
   createNewBlankProject: (name?: string) => void;
 
+  // Domain Flow Filters & Controls
+  showDataFlow: boolean;
+  showElectricFlow: boolean;
+  showFluidFlow: boolean;
+  showVideoFlow: boolean;
+  toggleDomainFlow: (domain: 'DATA' | 'ELECTRICITY' | 'FLUID' | 'VIDEO') => void;
+  loadSystemDesign: (type: 'NETWORK' | 'ELECTRICAL' | 'PLUMBING' | 'MULTI_DOMAIN' | 'CCTV') => void;
+  injectFaultOrSurge: (type: 'POWER_SURGE' | 'PUMP_BOOST' | 'PACKET_BURST') => void;
+
   toggleSimulation: (running?: boolean) => void;
   setSimulationSpeed: (speed: number) => void;
   triggerPacketBurst: () => void;
@@ -161,8 +174,12 @@ const initialTelemetry: SimulationTelemetry = {
   activePackets: 0,
   deliveredPackets: 0,
   droppedPackets: 0,
-  averageLatencyMs: 0,
-  throughputMbps: 0,
+  averageLatencyMs: 1.2,
+  throughputMbps: 350,
+  totalPowerWatts: 42500,
+  totalCurrentAmps: 184.8,
+  totalFluidFlowRate: 48.5,
+  averagePressurePsi: 58,
   nodeLoads: {},
   linkSaturations: {}
 };
@@ -191,12 +208,12 @@ function getStoredProjects(): SavedProject[] {
     console.warn('Could not read saved projects from localStorage', err);
   }
 
-  // Initial Seed Projects
+  // Initial Seed Projects across Engineering Domains
   const demoGraph = createDemoSmallOfficeGraph();
   const seed1: SavedProject = {
     id: 'proj_small_office_01',
     name: 'Corporate HQ Small Office Network',
-    description: 'Baseline SME multi-tier network with firewall, PoE switching, and workstations.',
+    description: 'Baseline SME multi-tier network with firewall, PoE switching, and workstations with live data packets.',
     domain: 'NETWORK',
     graph: demoGraph,
     deviceCount: Object.keys(demoGraph.nodes).length,
@@ -206,29 +223,49 @@ function getStoredProjects(): SavedProject[] {
     updatedAt: new Date().toISOString()
   };
 
-  const seed2Graph = generateWizardTopology({
-    archetype: 'DATA_CENTER',
-    projectName: 'High-Density Data Center Spine/Leaf',
-    subnetPrefix: '10.240.0',
-    clientCount: 12,
-    includeWifi: false,
-    includeVoip: false,
-    includeRedundancy: true
-  });
-  const seed2: SavedProject = {
-    id: 'proj_datacenter_spine_leaf',
-    name: 'High-Density Data Center Spine/Leaf',
-    description: 'BGP Edge Border Router with 10G SFP+ Aggregation, 42U server racks, dual UPS, and SAN array.',
-    domain: 'NETWORK',
-    graph: seed2Graph,
-    deviceCount: Object.keys(seed2Graph.nodes).length,
-    connectionCount: Object.keys(seed2Graph.connections).length,
-    estimatedCost: 89400,
+  const elecGraph = generateElectricalFacilityTopology();
+  const seedElec: SavedProject = {
+    id: 'proj_elec_facility_01',
+    name: 'Critical Facility Electrical Distribution',
+    description: 'Grid transformer, standby diesel generator, ATS, 40kVA UPS, and PDUs with live 400V/230V AC current flow.',
+    domain: 'ELECTRICAL',
+    graph: elecGraph,
+    deviceCount: Object.keys(elecGraph.nodes).length,
+    connectionCount: Object.keys(elecGraph.connections).length,
+    estimatedCost: 89000,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
 
-  return [seed1, seed2];
+  const chwGraph = generateChilledWaterCoolingTopology();
+  const seedPlumb: SavedProject = {
+    id: 'proj_chw_cooling_01',
+    name: 'Data Center Chilled Water & Liquid Cooling',
+    description: '100-ton liquid chiller, dual circulation pumps, in-row CRAH air handlers with live flowing chilled water.',
+    domain: 'PLUMBING',
+    graph: chwGraph,
+    deviceCount: Object.keys(chwGraph.nodes).length,
+    connectionCount: Object.keys(chwGraph.connections).length,
+    estimatedCost: 172000,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const facilityGraph = generateMultiDomainSmartFacilityTopology();
+  const seedFacility: SavedProject = {
+    id: 'proj_smart_facility_01',
+    name: 'Integrated Multi-Domain Smart Data Center',
+    description: 'Unified facility with simultaneous Network (10G Fiber), Electrical Power (230V AC), and Chilled Water (7°C).',
+    domain: 'MULTI_DOMAIN',
+    graph: facilityGraph,
+    deviceCount: Object.keys(facilityGraph.nodes).length,
+    connectionCount: Object.keys(facilityGraph.connections).length,
+    estimatedCost: 215000,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  return [seed1, seedElec, seedPlumb, seedFacility];
 }
 
 function persistProjects(projects: SavedProject[]) {
@@ -269,11 +306,17 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   libraries: BUILTIN_LIBRARIES,
   activeLibraryId: 'lib_cisco_enterprise',
 
-  isSimulating: false,
+  isSimulating: true, // Default to true so flowing packets, electrical current, and fluids are immediately visible!
   simulationSpeed: 1,
   simulationTick: 0,
   activePackets: [],
   telemetry: initialTelemetry,
+
+  // Domain Flow Filters
+  showDataFlow: true,
+  showElectricFlow: true,
+  showFluidFlow: true,
+  showVideoFlow: true,
 
   history: [JSON.stringify(initialGraph)],
   historyIndex: 0,
@@ -998,17 +1041,100 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     }));
   },
 
+  toggleDomainFlow: (domain) => {
+    set((state) => {
+      if (domain === 'DATA') return { showDataFlow: !state.showDataFlow };
+      if (domain === 'ELECTRICITY') return { showElectricFlow: !state.showElectricFlow };
+      if (domain === 'FLUID') return { showFluidFlow: !state.showFluidFlow };
+      if (domain === 'VIDEO') return { showVideoFlow: !state.showVideoFlow };
+      return state;
+    });
+  },
+
+  loadSystemDesign: (type) => {
+    let newGraph: EngineeringGraph;
+    let projName = '';
+    if (type === 'ELECTRICAL') {
+      newGraph = generateElectricalFacilityTopology();
+      projName = 'Critical Facility Electrical Distribution';
+    } else if (type === 'PLUMBING') {
+      newGraph = generateChilledWaterCoolingTopology();
+      projName = 'Data Center Chilled Water & Liquid Cooling';
+    } else if (type === 'MULTI_DOMAIN') {
+      newGraph = generateMultiDomainSmartFacilityTopology();
+      projName = 'Integrated Smart Facility (Data + Power + Water)';
+    } else if (type === 'CCTV') {
+      newGraph = generateWizardTopology({
+        archetype: 'SECURITY_CCTV',
+        projectName: 'Enterprise CCTV & Perimeter Security',
+        subnetPrefix: '192.168.20',
+        clientCount: 4,
+        includeWifi: false,
+        includeVoip: false,
+        includeRedundancy: true
+      });
+      projName = 'Enterprise CCTV Surveillance System';
+    } else {
+      newGraph = createDemoSmallOfficeGraph();
+      projName = 'Corporate HQ Network Blueprint';
+    }
+
+    set((state) => ({
+      graph: newGraph,
+      currentProjectId: newGraph.designId,
+      currentProjectName: projName,
+      selectedNodeId: null,
+      selectedConnectionId: null,
+      pendingPort: null,
+      activePackets: [],
+      isSimulating: true,
+      viewport: { x: 40, y: 40, zoom: 0.8 },
+      ...pushSnapshot({ ...state, graph: newGraph })
+    }));
+    get().validate();
+  },
+
+  injectFaultOrSurge: (type) => {
+    if (type === 'PACKET_BURST') {
+      get().triggerPacketBurst();
+      return;
+    }
+
+    const { graph } = get();
+    const conns = Object.values(graph.connections);
+    const targetConns = conns.filter(c => type === 'POWER_SURGE' ? (c.domain === 'ELECTRICAL' || c.connectionType.includes('POWER')) : (c.domain === 'PLUMBING' || c.connectionType.includes('PIPE')));
+    if (targetConns.length === 0) return;
+
+    const surgePackets: SimulationPacket[] = targetConns.map(c => ({
+      id: `surge_${c.id}_${Date.now()}`,
+      sourceNodeId: c.sourceComponentId,
+      targetNodeId: c.targetComponentId,
+      currentEdgeId: c.id,
+      progressPercent: 5,
+      medium: type === 'POWER_SURGE' ? 'ELECTRICITY' : 'FLUID',
+      protocol: type === 'POWER_SURGE' ? 'AC_400V' : 'CHILLED_WATER',
+      value: type === 'POWER_SURGE' ? 55000 : 75,
+      unit: type === 'POWER_SURGE' ? 'W' : 'L/s',
+      label: type === 'POWER_SURGE' ? '⚡ SURGE 400V • 55kW' : '💧 PUMP SURGE 75 L/s',
+      status: 'ACTIVE',
+      color: type === 'POWER_SURGE' ? '#ef4444' : '#0284c7'
+    }));
+
+    set(state => ({ activePackets: [...state.activePackets, ...surgePackets] }));
+  },
+
   tickSimulation: () => {
     const { graph, simulationTick, activePackets, telemetry } = get();
     
-    // Spawn automatic traffic packets if simulation is running and packet count is low
-    if (activePackets.length < 8 && Math.random() > 0.4) {
-      get().triggerPacketBurst();
+    // Continuously generate realistic domain flow particles across active connections
+    let currentPackets = activePackets;
+    if (currentPackets.length < 24) {
+      currentPackets = spawnContinuousFlowPackets(graph, currentPackets);
     }
 
     const simState = stepNetworkSimulation(graph, {
       tick: simulationTick,
-      packets: activePackets,
+      packets: currentPackets,
       telemetry
     });
 

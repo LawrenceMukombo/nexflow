@@ -3,7 +3,7 @@ import { ComponentPort, EngineeringConnection } from '@omniflow/shared-types';
 export interface CableSpecification {
   type: string;
   name: string;
-  category: 'TWISTED_PAIR' | 'FIBER_OPTIC' | 'SERIAL' | 'COAXIAL';
+  category: 'TWISTED_PAIR' | 'FIBER_OPTIC' | 'SERIAL' | 'COAXIAL' | 'ELECTRICAL_FEEDER' | 'HYDRAULIC_PIPE';
   maxBandwidthMbps: number;
   maxDistanceMeters: number;
   costPerMeter: number;
@@ -121,6 +121,88 @@ export const CABLE_CATALOG: Record<string, CableSpecification> = {
     costPerMeter: 1.1,
     labourPerMeter: 0.9,
     supportedPortTypes: ['COAX_BNC', 'F_TYPE']
+  },
+  // Electrical Conductors
+  POWER_3PHASE_400V: {
+    type: 'POWER_3PHASE_400V',
+    name: '3-Phase 400V AC Feeder Cable (XLPE)',
+    category: 'ELECTRICAL_FEEDER',
+    maxBandwidthMbps: 45000, // Watts (45 kW)
+    maxDistanceMeters: 250,
+    costPerMeter: 14.5,
+    labourPerMeter: 7.5,
+    supportedPortTypes: ['AC_3PHASE', 'AC_TERMINAL']
+  },
+  POWER_1PHASE_230V: {
+    type: 'POWER_1PHASE_230V',
+    name: 'Single-Phase 230V 16A Power Cable',
+    category: 'ELECTRICAL_FEEDER',
+    maxBandwidthMbps: 3680, // Watts (3.68 kW)
+    maxDistanceMeters: 60,
+    costPerMeter: 3.8,
+    labourPerMeter: 1.8,
+    supportedPortTypes: ['AC_1PHASE', 'IEC_C13', 'IEC_C19', 'AC_TERMINAL']
+  },
+  POWER_DC_48V: {
+    type: 'POWER_DC_48V',
+    name: '-48V DC Telecom Power Bus Cable',
+    category: 'ELECTRICAL_FEEDER',
+    maxBandwidthMbps: 2400, // Watts (2.4 kW)
+    maxDistanceMeters: 40,
+    costPerMeter: 6.5,
+    labourPerMeter: 2.5,
+    supportedPortTypes: ['DC_48V', 'DC_POLE']
+  },
+  SOLAR_DC_STRING: {
+    type: 'SOLAR_DC_STRING',
+    name: 'Solar PV 600V DC String Cable',
+    category: 'ELECTRICAL_FEEDER',
+    maxBandwidthMbps: 15000, // Watts (15 kW)
+    maxDistanceMeters: 120,
+    costPerMeter: 4.5,
+    labourPerMeter: 2.2,
+    supportedPortTypes: ['MC4_DC', 'DC_POLE']
+  },
+  // Hydraulic & Plumbing Pipes
+  PIPE_CHILLED_SUPPLY: {
+    type: 'PIPE_CHILLED_SUPPLY',
+    name: 'Chilled Water Supply 7°C Pipe (6" Steel)',
+    category: 'HYDRAULIC_PIPE',
+    maxBandwidthMbps: 100, // L/s flow rate
+    maxDistanceMeters: 500,
+    costPerMeter: 48.0,
+    labourPerMeter: 28.0,
+    supportedPortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN']
+  },
+  PIPE_CHILLED_RETURN: {
+    type: 'PIPE_CHILLED_RETURN',
+    name: 'Chilled Water Return 14°C Pipe (6" Steel)',
+    category: 'HYDRAULIC_PIPE',
+    maxBandwidthMbps: 100, // L/s flow rate
+    maxDistanceMeters: 500,
+    costPerMeter: 48.0,
+    labourPerMeter: 28.0,
+    supportedPortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN']
+  },
+  PIPE_WATER_SUPPLY: {
+    type: 'PIPE_WATER_SUPPLY',
+    name: 'Municipal Potable Cold Water Pipe (2" Copper)',
+    category: 'HYDRAULIC_PIPE',
+    maxBandwidthMbps: 25, // L/s
+    maxDistanceMeters: 200,
+    costPerMeter: 19.5,
+    labourPerMeter: 12.0,
+    supportedPortTypes: ['PIPE_THREAD_2IN', 'PIPE_NPT_1IN']
+  },
+  PIPE_CONDENSATE: {
+    type: 'PIPE_CONDENSATE',
+    name: 'Condensate Drainage Pipe (1.5" PVC)',
+    category: 'HYDRAULIC_PIPE',
+    maxBandwidthMbps: 10, // L/s
+    maxDistanceMeters: 80,
+    costPerMeter: 6.8,
+    labourPerMeter: 4.5,
+    supportedPortTypes: ['PIPE_PVC_1_5IN', 'PIPE_NPT_1IN']
   }
 };
 
@@ -138,13 +220,13 @@ export function checkPortCompatibility(
   if (sourcePort.occupiedByConnectionId) {
     return {
       compatible: false,
-      reason: `Source port '${sourcePort.name}' is already connected to another cable.`
+      reason: `Source port '${sourcePort.name}' is already connected to another line.`
     };
   }
   if (targetPort.occupiedByConnectionId) {
     return {
       compatible: false,
-      reason: `Target port '${targetPort.name}' is already connected to another cable.`
+      reason: `Target port '${targetPort.name}' is already connected to another line.`
     };
   }
 
@@ -152,7 +234,7 @@ export function checkPortCompatibility(
   if (sourcePort.nodeId === targetPort.nodeId) {
     return {
       compatible: false,
-      reason: 'Cannot connect a port to another port on the exact same device directly.'
+      reason: 'Cannot connect a port to another port on the exact same component directly.'
     };
   }
 
@@ -176,14 +258,33 @@ export function checkPortCompatibility(
   if (!sourceMatchesTarget && !targetMatchesSource && sourcePort.type !== targetPort.type) {
     return {
       compatible: false,
-      reason: `Port physical type mismatch: '${sourcePort.type}' cannot directly connect to '${targetPort.type}' without a media converter.`
+      reason: `Physical medium mismatch: '${sourcePort.type}' cannot directly connect to '${targetPort.type}'.`
     };
   }
 
-  // Select suitable default cable
+  // Select suitable default cable/pipe/feeder
   let recommendedCable = 'CAT6';
-  if (sourcePort.type === 'FIBER_LC' || targetPort.type === 'FIBER_LC') {
+  const sType = sourcePort.type.toUpperCase();
+  const tType = targetPort.type.toUpperCase();
+
+  if (sType.includes('AC_3PHASE') || tType.includes('AC_3PHASE')) {
+    recommendedCable = 'POWER_3PHASE_400V';
+  } else if (sType.includes('AC_1PHASE') || tType.includes('AC_1PHASE') || sType.includes('IEC_C') || tType.includes('IEC_C')) {
+    recommendedCable = 'POWER_1PHASE_230V';
+  } else if (sType.includes('DC_48V') || tType.includes('DC_48V')) {
+    recommendedCable = 'POWER_DC_48V';
+  } else if (sType.includes('MC4') || tType.includes('MC4')) {
+    recommendedCable = 'SOLAR_DC_STRING';
+  } else if (sType.includes('FLANGE_6IN') || tType.includes('FLANGE_6IN')) {
+    recommendedCable = sourcePort.name.toLowerCase().includes('return') ? 'PIPE_CHILLED_RETURN' : 'PIPE_CHILLED_SUPPLY';
+  } else if (sType.includes('PIPE_PVC') || tType.includes('PIPE_PVC')) {
+    recommendedCable = 'PIPE_CONDENSATE';
+  } else if (sType.includes('PIPE') || tType.includes('PIPE')) {
+    recommendedCable = 'PIPE_WATER_SUPPLY';
+  } else if (sType.includes('FIBER') || tType.includes('FIBER')) {
     recommendedCable = 'FIBER_SM';
+  } else if (sType.includes('COAX') || tType.includes('COAX')) {
+    recommendedCable = 'COAX_RG6';
   } else if (sourcePort.capacity && sourcePort.capacity > 1000) {
     recommendedCable = 'CAT6A';
   }
@@ -206,10 +307,20 @@ export function createConnectionInstance(
   const cableSpec = CABLE_CATALOG[cableType] || CABLE_CATALOG.CAT6;
   const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
+  // Determine domain from cable/pipe category
+  let domain: 'NETWORK' | 'ELECTRICAL' | 'PLUMBING' | 'SOLAR' | 'CCTV' = 'NETWORK';
+  if (cableSpec.category === 'ELECTRICAL_FEEDER') {
+    domain = cableType === 'SOLAR_DC_STRING' ? 'SOLAR' : 'ELECTRICAL';
+  } else if (cableSpec.category === 'HYDRAULIC_PIPE') {
+    domain = 'PLUMBING';
+  } else if (cableSpec.type === 'COAX_RG6') {
+    domain = 'CCTV';
+  }
+
   return {
     id: connectionId,
     designId,
-    domain: 'NETWORK',
+    domain,
     sourceComponentId: sourceNodeId,
     sourcePortId,
     targetComponentId: targetNodeId,
@@ -219,13 +330,14 @@ export function createConnectionInstance(
     properties: {
       bandwidthLimitMbps: cableSpec.maxBandwidthMbps,
       maxDistanceMeters: cableSpec.maxDistanceMeters,
-      cableName: cableSpec.name
+      cableName: cableSpec.name,
+      category: cableSpec.category
     },
     simulationState: {
       flowRate: 0,
       saturationPercent: 0,
       packetLossPercent: 0,
-      latencyMs: Number((estimatedLengthMeters * 0.005).toFixed(3)), // ~5ns per meter propagation
+      latencyMs: Number((estimatedLengthMeters * 0.005).toFixed(3)),
       isCongested: false,
       isFailed: false
     }

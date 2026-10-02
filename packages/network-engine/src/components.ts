@@ -1,26 +1,9 @@
-import { EngineeringComponent, ComponentPort, CostData } from '@omniflow/shared-types';
-
-export interface PortBlueprint {
-  name: string;
-  type: string;
-  direction: 'input' | 'output' | 'bidirectional';
-  capacity: number;
-  unit: string;
-  compatiblePortTypes: string[];
-  properties?: Record<string, unknown>;
-}
-
-export interface ComponentTemplate {
-  type: string;
-  category: 'CORE' | 'SWITCHING' | 'SECURITY' | 'ENDPOINTS' | 'INFRASTRUCTURE' | 'WIRELESS';
-  name: string;
-  defaultTagPrefix: string;
-  description: string;
-  icon: string;
-  defaultCost: CostData;
-  defaultProperties: Record<string, unknown>;
-  portsTemplate: PortBlueprint[];
-}
+import { 
+  EngineeringComponent, 
+  ComponentPort, 
+  PortBlueprint, 
+  ComponentTemplate 
+} from '@omniflow/shared-types';
 
 export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
   ISP_FEED: {
@@ -959,6 +942,407 @@ export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
     portsTemplate: [
       { name: 'LAN (PoE)', type: 'RJ45', direction: 'input', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'], properties: { requiresPoe: true } }
     ]
+  },
+
+  // ==========================================
+  // ELECTRICAL POWER DISTRIBUTION
+  // ==========================================
+  GRID_TRANSFORMER: {
+    type: 'GRID_TRANSFORMER',
+    category: 'ELECTRICAL',
+    name: 'Utility Step-Down Transformer (500kVA)',
+    defaultTagPrefix: 'XFMR',
+    description: '11kV to 400V/230V 3-Phase 500kVA Utility Feeder',
+    icon: 'ThunderboltOutlined',
+    defaultCost: {
+      partNumber: 'XFMR-500KVA-3P',
+      manufacturer: 'Schneider Electric',
+      unitCost: 18500,
+      labourCost: 4500,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      inputVoltage: '11,000V AC',
+      outputVoltage: '400V / 230V AC',
+      kvaRating: 500,
+      frequencyHz: 50,
+      efficiencyPercent: 98.5,
+      activeLoadKw: 68.4
+    },
+    portsTemplate: [
+      { name: '400V_OUT_1', type: 'AC_3PHASE', direction: 'output', capacity: 350000, unit: 'W', compatiblePortTypes: ['AC_3PHASE', 'AC_TERMINAL'] },
+      { name: '400V_OUT_2', type: 'AC_3PHASE', direction: 'output', capacity: 150000, unit: 'W', compatiblePortTypes: ['AC_3PHASE', 'AC_TERMINAL'] }
+    ]
+  },
+
+  DIESEL_GENERATOR: {
+    type: 'DIESEL_GENERATOR',
+    category: 'ELECTRICAL',
+    name: 'Standby Diesel Generator (250kVA)',
+    defaultTagPrefix: 'GEN',
+    description: '250kVA Emergency Standby Generator with Auto-Transfer',
+    icon: 'FireOutlined',
+    defaultCost: {
+      partNumber: 'GEN-250KVA-CUMMINS',
+      manufacturer: 'Cummins Power',
+      unitCost: 32000,
+      labourCost: 5500,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      fuelType: 'Diesel',
+      fuelLevelPercent: 94,
+      runtimeHours: 48,
+      outputVoltage: '400V AC 3-Phase',
+      kvaRating: 250,
+      autoStartDelaySec: 8
+    },
+    portsTemplate: [
+      { name: 'GEN_400V_OUT', type: 'AC_3PHASE', direction: 'output', capacity: 200000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] }
+    ]
+  },
+
+  ATS_SWITCH: {
+    type: 'ATS_SWITCH',
+    category: 'ELECTRICAL',
+    name: 'Automatic Transfer Switch (ATS 400A)',
+    defaultTagPrefix: 'ATS',
+    description: 'Mains Utility to Standby Generator Failover Switch',
+    icon: 'SwapOutlined',
+    defaultCost: {
+      partNumber: 'ATS-400A-3P',
+      manufacturer: 'Eaton',
+      unitCost: 4500,
+      labourCost: 1200,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      currentRatingA: 400,
+      transferTimeMs: 16,
+      activeSource: 'Mains Utility (Primary)',
+      nominalVoltage: '400V AC'
+    },
+    portsTemplate: [
+      { name: 'MAINS_IN', type: 'AC_3PHASE', direction: 'input', capacity: 250000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] },
+      { name: 'GEN_IN', type: 'AC_3PHASE', direction: 'input', capacity: 250000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] },
+      { name: 'LOAD_OUT', type: 'AC_3PHASE', direction: 'output', capacity: 250000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] }
+    ]
+  },
+
+  UPS_ENTERPRISE: {
+    type: 'UPS_ENTERPRISE',
+    category: 'ELECTRICAL',
+    name: '40kVA Online Double-Conversion UPS',
+    defaultTagPrefix: 'UPS',
+    description: 'N+1 Modular Double-Conversion Battery System',
+    icon: 'SafetyCertificateOutlined',
+    defaultCost: {
+      partNumber: 'UPS-40KVA-APC',
+      manufacturer: 'APC Symmetra',
+      unitCost: 14500,
+      labourCost: 2200,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      batteryRuntimeMin: 32,
+      batteryHealthPercent: 100,
+      efficiencyPercent: 96.5,
+      activeLoadKw: 24.2,
+      inputVoltage: '400V AC',
+      outputVoltage: '230V AC'
+    },
+    portsTemplate: [
+      { name: 'AC_IN', type: 'AC_3PHASE', direction: 'input', capacity: 40000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] },
+      { name: 'PDU_FEED_A', type: 'AC_1PHASE', direction: 'output', capacity: 20000, unit: 'W', compatiblePortTypes: ['AC_1PHASE', 'IEC_C19', 'AC_TERMINAL'] },
+      { name: 'PDU_FEED_B', type: 'AC_1PHASE', direction: 'output', capacity: 20000, unit: 'W', compatiblePortTypes: ['AC_1PHASE', 'IEC_C19', 'AC_TERMINAL'] },
+      { name: 'MGMT_ETH', type: 'RJ45', direction: 'bidirectional', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'] }
+    ]
+  },
+
+  PDU_RACK_32A: {
+    type: 'PDU_RACK_32A',
+    category: 'ELECTRICAL',
+    name: 'Intelligent Metered Rack PDU (32A)',
+    defaultTagPrefix: 'PDU',
+    description: 'Vertical 0U PDU with Per-Outlet Power Monitoring',
+    icon: 'AppstoreOutlined',
+    defaultCost: {
+      partNumber: 'PDU-32A-METERED',
+      manufacturer: 'Raritan PX3',
+      unitCost: 1350,
+      labourCost: 200,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      inputVoltage: '230V AC',
+      maxCurrentAmps: 32,
+      activeAmps: 18.4,
+      powerFactor: 0.98,
+      outletCount: 24
+    },
+    portsTemplate: [
+      { name: 'FEED_IN', type: 'AC_1PHASE', direction: 'input', capacity: 7360, unit: 'W', compatiblePortTypes: ['AC_1PHASE', 'IEC_C19'] },
+      { name: 'OUT_C13_1', type: 'IEC_C13', direction: 'output', capacity: 2300, unit: 'W', compatiblePortTypes: ['IEC_C13', 'AC_1PHASE'] },
+      { name: 'OUT_C13_2', type: 'IEC_C13', direction: 'output', capacity: 2300, unit: 'W', compatiblePortTypes: ['IEC_C13', 'AC_1PHASE'] },
+      { name: 'OUT_C19_1', type: 'IEC_C19', direction: 'output', capacity: 3680, unit: 'W', compatiblePortTypes: ['IEC_C19', 'AC_1PHASE'] },
+      { name: 'OUT_C19_2', type: 'IEC_C19', direction: 'output', capacity: 3680, unit: 'W', compatiblePortTypes: ['IEC_C19', 'AC_1PHASE'] },
+      { name: 'MGMT_LAN', type: 'RJ45', direction: 'bidirectional', capacity: 100, unit: 'Mbps', compatiblePortTypes: ['RJ45'] }
+    ]
+  },
+
+  SOLAR_PV_ARRAY: {
+    type: 'SOLAR_PV_ARRAY',
+    category: 'SOLAR',
+    name: '25kW Monocrystalline Solar PV Array',
+    defaultTagPrefix: 'SOLAR',
+    description: 'High-Yield Commercial Rooftop Solar Array (600V DC)',
+    icon: 'SunOutlined',
+    defaultCost: {
+      partNumber: 'PV-25KW-MONO',
+      manufacturer: 'SunPower Maxeon',
+      unitCost: 19500,
+      labourCost: 4200,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      peakKw: 25,
+      currentOutputKw: 22.8,
+      irradianceWm2: 890,
+      dcVoltage: 650,
+      dcAmps: 35.1
+    },
+    portsTemplate: [
+      { name: 'DC_STR_1', type: 'MC4_DC', direction: 'output', capacity: 12500, unit: 'W', compatiblePortTypes: ['MC4_DC', 'DC_POLE'] },
+      { name: 'DC_STR_2', type: 'MC4_DC', direction: 'output', capacity: 12500, unit: 'W', compatiblePortTypes: ['MC4_DC', 'DC_POLE'] }
+    ]
+  },
+
+  SOLAR_INVERTER: {
+    type: 'SOLAR_INVERTER',
+    category: 'SOLAR',
+    name: '20kW 3-Phase Grid-Tied Solar Inverter',
+    defaultTagPrefix: 'INV',
+    description: 'Commercial MPPT Inverter (Converts 600V DC to 400V AC)',
+    icon: 'SlidersOutlined',
+    defaultCost: {
+      partNumber: 'INV-20KW-SMA',
+      manufacturer: 'SMA Solar',
+      unitCost: 3900,
+      labourCost: 850,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      mpptChannels: 2,
+      efficiencyPercent: 98.4,
+      activePowerAcKw: 19.8,
+      gridVoltageAc: '400V 3-Phase'
+    },
+    portsTemplate: [
+      { name: 'DC_IN_1', type: 'MC4_DC', direction: 'input', capacity: 12500, unit: 'W', compatiblePortTypes: ['MC4_DC', 'DC_POLE'] },
+      { name: 'DC_IN_2', type: 'MC4_DC', direction: 'input', capacity: 12500, unit: 'W', compatiblePortTypes: ['MC4_DC', 'DC_POLE'] },
+      { name: 'AC_GRID_OUT', type: 'AC_3PHASE', direction: 'output', capacity: 20000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] }
+    ]
+  },
+
+  // ==========================================
+  // HYDRAULIC & CHILLED WATER PLUMBING
+  // ==========================================
+  WATER_MAIN_METER: {
+    type: 'WATER_MAIN_METER',
+    category: 'PLUMBING',
+    name: 'Municipal Water Main Demarcation',
+    defaultTagPrefix: 'WTR',
+    description: 'City Potable Water Connection with Dual Check Valves',
+    icon: 'DashboardOutlined',
+    defaultCost: {
+      partNumber: 'WTR-MAIN-2IN',
+      manufacturer: 'Mueller',
+      unitCost: 1800,
+      labourCost: 800,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      supplyPressurePsi: 65,
+      flowRateLps: 5.2,
+      waterTempC: 15.0
+    },
+    portsTemplate: [
+      { name: 'SUPPLY_OUT', type: 'PIPE_THREAD_2IN', direction: 'output', capacity: 25, unit: 'L/s', compatiblePortTypes: ['PIPE_THREAD_2IN', 'PIPE_NPT_1IN'] }
+    ]
+  },
+
+  WATER_CHILLER_CENTRAL: {
+    type: 'WATER_CHILLER_CENTRAL',
+    category: 'COOLING',
+    name: '100-Ton Precision Liquid Chiller',
+    defaultTagPrefix: 'CHLR',
+    description: 'Magnetic-Bearing Centrifugal Chiller (7°C Chilled Water)',
+    icon: 'RocketOutlined',
+    defaultCost: {
+      partNumber: 'CHLR-100T-YORK',
+      manufacturer: 'Johnson Controls York',
+      unitCost: 65000,
+      labourCost: 12000,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      coolingCapacityTons: 100,
+      copEfficiency: 5.9,
+      setpointTempC: 7.0,
+      returnTempC: 14.2,
+      chwFlowRateLps: 45.0,
+      chwPressurePsi: 58,
+      powerDrawKw: 62.0
+    },
+    portsTemplate: [
+      { name: 'CHW_SUPPLY', type: 'PIPE_FLANGE_6IN', direction: 'output', capacity: 80, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'CHW_RETURN', type: 'PIPE_FLANGE_6IN', direction: 'input', capacity: 80, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'POWER_AC_IN', type: 'AC_3PHASE', direction: 'input', capacity: 75000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] }
+    ]
+  },
+
+  DUAL_CIRCULATION_PUMP: {
+    type: 'DUAL_CIRCULATION_PUMP',
+    category: 'PLUMBING',
+    name: 'Dual Hydronic Circulation Pump (VFD)',
+    defaultTagPrefix: 'PMP',
+    description: 'N+1 Variable-Frequency Chilled Water Circulation Pumps',
+    icon: 'SyncOutlined',
+    defaultCost: {
+      partNumber: 'PMP-DUAL-VFD-6IN',
+      manufacturer: 'Grundfos Hydro',
+      unitCost: 7200,
+      labourCost: 1600,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      headPressurePsi: 52,
+      speedRpm: 1750,
+      activeFlowLps: 45.0,
+      motorPowerKw: 7.5
+    },
+    portsTemplate: [
+      { name: 'SUCTION_IN', type: 'PIPE_FLANGE_6IN', direction: 'input', capacity: 80, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'DISCHARGE_OUT', type: 'PIPE_FLANGE_6IN', direction: 'output', capacity: 80, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'POWER_IN', type: 'AC_3PHASE', direction: 'input', capacity: 7500, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] }
+    ]
+  },
+
+  CRAC_PRECISION_COOLER: {
+    type: 'CRAC_PRECISION_COOLER',
+    category: 'COOLING',
+    name: 'In-Row Precision Air Handler (CRAH)',
+    defaultTagPrefix: 'CRAH',
+    description: 'Chilled-Water Precision Cooling for Server Aisles (35kW)',
+    icon: 'CloudServerOutlined',
+    defaultCost: {
+      partNumber: 'CRAH-35KW-VERTIV',
+      manufacturer: 'Vertiv Liebert',
+      unitCost: 18500,
+      labourCost: 2800,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      airflowCfm: 6500,
+      thermalCoolingKw: 35.0,
+      returnAirTempC: 34.0,
+      supplyAirTempC: 20.5,
+      waterFlowLps: 3.8
+    },
+    portsTemplate: [
+      { name: 'CHW_IN', type: 'PIPE_FLANGE_6IN', direction: 'input', capacity: 20, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'CHW_OUT', type: 'PIPE_FLANGE_6IN', direction: 'output', capacity: 20, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'CONDENSATE_OUT', type: 'PIPE_PVC_1_5IN', direction: 'output', capacity: 2, unit: 'L/s', compatiblePortTypes: ['PIPE_PVC_1_5IN', 'PIPE_NPT_1IN'] },
+      { name: 'POWER_IN', type: 'AC_1PHASE', direction: 'input', capacity: 2500, unit: 'W', compatiblePortTypes: ['AC_1PHASE', 'IEC_C19'] },
+      { name: 'BMS_LAN', type: 'RJ45', direction: 'bidirectional', capacity: 100, unit: 'Mbps', compatiblePortTypes: ['RJ45'] }
+    ]
+  },
+
+  BUFFER_STORAGE_TANK: {
+    type: 'BUFFER_STORAGE_TANK',
+    category: 'PLUMBING',
+    name: '5,000L Chilled Water Buffer Tank',
+    defaultTagPrefix: 'TNK',
+    description: 'Thermal Energy Storage Tank with Internal Baffles',
+    icon: 'DatabaseOutlined',
+    defaultCost: {
+      partNumber: 'TNK-5000L-STEEL',
+      manufacturer: 'Niles Steel Tank',
+      unitCost: 8500,
+      labourCost: 1900,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      capacityLiters: 5000,
+      pressureRatingPsi: 150,
+      insulationRValue: 16
+    },
+    portsTemplate: [
+      { name: 'TANK_IN', type: 'PIPE_FLANGE_6IN', direction: 'input', capacity: 100, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'TANK_OUT', type: 'PIPE_FLANGE_6IN', direction: 'output', capacity: 100, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] }
+    ]
+  },
+
+  COOLING_TOWER_ROOF: {
+    type: 'COOLING_TOWER_ROOF',
+    category: 'COOLING',
+    name: 'Evaporative Cooling Tower (120 Tons)',
+    defaultTagPrefix: 'CT',
+    description: 'Induced-Draft Rooftop Evaporative Heat Rejection Tower',
+    icon: 'BuildOutlined',
+    defaultCost: {
+      partNumber: 'CT-120T-BAC',
+      manufacturer: 'Baltimore Aircoil',
+      unitCost: 38000,
+      labourCost: 7500,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      waterFlowGpm: 360,
+      fanMotorKw: 11.0,
+      waterInTempC: 35.0,
+      waterOutTempC: 29.5
+    },
+    portsTemplate: [
+      { name: 'COND_WTR_IN', type: 'PIPE_FLANGE_6IN', direction: 'input', capacity: 100, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'COND_WTR_OUT', type: 'PIPE_FLANGE_6IN', direction: 'output', capacity: 100, unit: 'L/s', compatiblePortTypes: ['PIPE_FLANGE_6IN', 'PIPE_THREAD_2IN'] },
+      { name: 'POWER_IN', type: 'AC_3PHASE', direction: 'input', capacity: 11000, unit: 'W', compatiblePortTypes: ['AC_3PHASE'] }
+    ]
+  },
+
+  // ==========================================
+  // MULTI-DOMAIN INTEGRATED FACILITY
+  // ==========================================
+  RACK_HYPERSCALE_42U: {
+    type: 'RACK_HYPERSCALE_42U',
+    category: 'FACILITY',
+    name: 'Hyperscale 42U Data Center Rack',
+    defaultTagPrefix: 'RACK',
+    description: 'Integrated Rack with Dual 32A Power, Liquid Cooling & 10G Fiber',
+    icon: 'HddOutlined',
+    defaultCost: {
+      partNumber: 'RCK-42U-HYPER',
+      manufacturer: 'Rittal / Schneider',
+      unitCost: 5200,
+      labourCost: 950,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      uHeight: 42,
+      activeServers: 16,
+      totalLoadKw: 14.8,
+      chwInletTempC: 7.2,
+      chwOutletTempC: 13.8,
+      networkThroughputGbps: 20
+    },
+    portsTemplate: [
+      { name: 'NET_FIBER_1', type: 'FIBER_LC', direction: 'bidirectional', capacity: 10000, unit: 'Mbps', compatiblePortTypes: ['FIBER_LC'] },
+      { name: 'NET_FIBER_2', type: 'FIBER_LC', direction: 'bidirectional', capacity: 10000, unit: 'Mbps', compatiblePortTypes: ['FIBER_LC'] },
+      { name: 'PWR_FEED_A', type: 'IEC_C19', direction: 'input', capacity: 7360, unit: 'W', compatiblePortTypes: ['IEC_C19', 'AC_1PHASE'] },
+      { name: 'PWR_FEED_B', type: 'IEC_C19', direction: 'input', capacity: 7360, unit: 'W', compatiblePortTypes: ['IEC_C19', 'AC_1PHASE'] },
+      { name: 'COOL_CHW_IN', type: 'PIPE_THREAD_2IN', direction: 'input', capacity: 15, unit: 'L/s', compatiblePortTypes: ['PIPE_THREAD_2IN', 'PIPE_FLANGE_6IN'] },
+      { name: 'COOL_CHW_OUT', type: 'PIPE_THREAD_2IN', direction: 'output', capacity: 15, unit: 'L/s', compatiblePortTypes: ['PIPE_THREAD_2IN', 'PIPE_FLANGE_6IN'] }
+    ]
   }
 };
 
@@ -994,10 +1378,18 @@ export function createComponentInstance(
     properties: { ...(pt.properties || {}) }
   }));
 
+  // Determine domain
+  let domain: 'NETWORK' | 'ELECTRICAL' | 'PLUMBING' | 'SOLAR' | 'CCTV' | 'MULTI_DOMAIN' = 'NETWORK';
+  if (template.category === 'ELECTRICAL') domain = 'ELECTRICAL';
+  else if (template.category === 'SOLAR') domain = 'SOLAR';
+  else if (template.category === 'PLUMBING' || template.category === 'COOLING') domain = 'PLUMBING';
+  else if (template.category === 'CCTV') domain = 'CCTV';
+  else if (template.category === 'FACILITY') domain = 'MULTI_DOMAIN';
+
   return {
     id: nodeId,
     designId,
-    domain: 'NETWORK',
+    domain,
     type: template.type,
     name: `${template.name} (${tag})`,
     tag,
