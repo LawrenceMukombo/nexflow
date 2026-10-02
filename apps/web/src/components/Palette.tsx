@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Input, 
   Collapse, 
@@ -7,23 +7,59 @@ import {
   Typography, 
   Segmented, 
   Select, 
-  Tag,
-  Checkbox,
-  message
+  Tag, 
+  Checkbox, 
+  message,
+  Empty
 } from 'antd';
 import { 
   SearchOutlined, 
-  PlusOutlined,
-  BookOutlined,
-  AppstoreAddOutlined,
-  CheckSquareOutlined,
-  ClearOutlined
+  PlusOutlined, 
+  BookOutlined, 
+  AppstoreAddOutlined, 
+  CheckSquareOutlined, 
+  ClearOutlined 
 } from '@ant-design/icons';
 import { NETWORK_COMPONENT_CATALOG } from '@omniflow/network-engine';
 import { useGraphStore } from '../store/graphStore';
 import { ComponentIcon } from './ComponentIcon';
+import { EngineeringDomain } from '@omniflow/shared-types';
 
 const { Text } = Typography;
+
+// Domain -> catalog category mapping
+const DOMAIN_CATEGORY_MAP: Record<EngineeringDomain, string[]> = {
+  NETWORK:      ['CORE', 'SWITCHING', 'SECURITY', 'WIRELESS', 'INFRASTRUCTURE', 'ENDPOINTS'],
+  ELECTRICAL:   ['ELECTRICAL', 'SOLAR'],
+  SOLAR:        ['SOLAR', 'ELECTRICAL'],
+  PLUMBING:     ['PLUMBING', 'COOLING'],
+  CCTV:         ['CCTV', 'SECURITY'],
+  MULTI_DOMAIN: ['CORE', 'SWITCHING', 'SECURITY', 'WIRELESS', 'INFRASTRUCTURE', 'ENDPOINTS', 'ELECTRICAL', 'SOLAR', 'PLUMBING', 'COOLING', 'CCTV', 'FACILITY'],
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  CORE:           'Core & Routing',
+  SWITCHING:      'Switching & Aggregation',
+  SECURITY:       'Firewalls & Perimeter',
+  WIRELESS:       'Wireless & WiFi',
+  INFRASTRUCTURE: 'Racks & Infrastructure',
+  ENDPOINTS:      'Endpoints & IoT',
+  ELECTRICAL:     'Power & Electrical Distribution',
+  SOLAR:          'Solar & Renewable Power',
+  PLUMBING:       'Plumbing & Piping',
+  COOLING:        'Cooling & HVAC',
+  CCTV:           'CCTV & Surveillance',
+  FACILITY:       'Integrated Facility Racks',
+};
+
+const DOMAIN_META: Record<EngineeringDomain, { label: string; color: string; emoji: string }> = {
+  NETWORK:      { label: 'Network',           color: '#0284c7', emoji: '🌐' },
+  ELECTRICAL:   { label: 'Electrical Power',  color: '#d97706', emoji: '⚡' },
+  SOLAR:        { label: 'Solar Energy',      color: '#ca8a04', emoji: '☀️' },
+  PLUMBING:     { label: 'Plumbing & Cooling',color: '#0284c7', emoji: '💧' },
+  CCTV:         { label: 'CCTV & Security',   color: '#c026d3', emoji: '🛡️' },
+  MULTI_DOMAIN: { label: 'All Domains',       color: '#7c3aed', emoji: '🏢' },
+};
 
 export const Palette: React.FC = () => {
   const [tabMode, setTabMode] = useState<'catalog' | 'libraries'>('catalog');
@@ -32,6 +68,7 @@ export const Palette: React.FC = () => {
   const [batchSelectedTypes, setBatchSelectedTypes] = useState<string[]>([]);
   
   const {
+    activeDomain,
     addComponent,
     addComponentsBatch,
     insertAssembly,
@@ -41,6 +78,9 @@ export const Palette: React.FC = () => {
     toggleLibraryModal,
     toggleCreateComponentModal
   } = useGraphStore();
+
+  const domainMeta = DOMAIN_META[activeDomain] || DOMAIN_META.NETWORK;
+  const allowedCategories = DOMAIN_CATEGORY_MAP[activeDomain] || DOMAIN_CATEGORY_MAP.NETWORK;
 
   const toggleBatchItem = (type: string) => {
     setBatchSelectedTypes(prev => {
@@ -60,20 +100,33 @@ export const Palette: React.FC = () => {
   const getIcon = (type: string) => <ComponentIcon type={type} size={18} />;
 
   const allItems = Object.values(NETWORK_COMPONENT_CATALOG);
-  const filteredItems = allItems.filter(item => 
-    item.name.toLowerCase().includes(search.toLowerCase()) ||
-    item.description.toLowerCase().includes(search.toLowerCase()) ||
-    item.category.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredItems = useMemo(() => {
+    return allItems.filter(item => {
+      // 1. Must belong to active domain unless in MULTI_DOMAIN
+      if (activeDomain !== 'MULTI_DOMAIN' && !allowedCategories.includes(item.category)) {
+        return false;
+      }
+      // 2. Search filter
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q) ||
+        item.type.toLowerCase().includes(q)
+      );
+    });
+  }, [allItems, activeDomain, allowedCategories, search]);
 
-  const categories = [
-    { key: 'CORE', label: 'Core & Routing', items: filteredItems.filter(i => i.category === 'CORE') },
-    { key: 'SWITCHING', label: 'Switching & Aggregation', items: filteredItems.filter(i => i.category === 'SWITCHING') },
-    { key: 'SECURITY', label: 'Firewalls & Perimeter', items: filteredItems.filter(i => i.category === 'SECURITY') },
-    { key: 'WIRELESS', label: 'Wireless & WiFi', items: filteredItems.filter(i => i.category === 'WIRELESS') },
-    { key: 'INFRASTRUCTURE', label: 'Racks & Infrastructure', items: filteredItems.filter(i => i.category === 'INFRASTRUCTURE') },
-    { key: 'ENDPOINTS', label: 'Endpoints, CCTV & IoT', items: filteredItems.filter(i => i.category === 'ENDPOINTS') }
-  ];
+  const categories = useMemo(() => {
+    return allowedCategories
+      .map(key => ({
+        key,
+        label: CATEGORY_LABELS[key] || key,
+        items: filteredItems.filter(i => i.category === key),
+      }))
+      .filter(cat => cat.items.length > 0);
+  }, [allowedCategories, filteredItems]);
 
   const currentLibrary = libraries.find(l => l.id === activeLibraryId) || libraries[0];
 
@@ -106,6 +159,28 @@ export const Palette: React.FC = () => {
           </Button>
         </div>
 
+        {/* Active Domain Indicator Banner */}
+        <div 
+          style={{ 
+            marginBottom: 10, 
+            padding: '5px 8px', 
+            backgroundColor: `${domainMeta.color}18`, 
+            border: `1px solid ${domainMeta.color}45`, 
+            borderRadius: 6, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 6 
+          }}
+        >
+          <span style={{ fontSize: 14 }}>{domainMeta.emoji}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: domainMeta.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            {domainMeta.label} Catalog
+          </span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#94a3b8' }}>
+            {filteredItems.length} items
+          </span>
+        </div>
+
         <Segmented
           block
           value={tabMode}
@@ -119,7 +194,7 @@ export const Palette: React.FC = () => {
 
         <Input
           prefix={<SearchOutlined style={{ color: '#64748b' }} />}
-          placeholder={tabMode === 'catalog' ? 'Filter catalog...' : 'Filter library items...'}
+          placeholder={tabMode === 'catalog' ? `Filter ${domainMeta.label.toLowerCase()}...` : 'Filter library items...'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
@@ -221,109 +296,123 @@ export const Palette: React.FC = () => {
       {/* Tab 1: Standard Equipment Catalog */}
       {tabMode === 'catalog' ? (
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
-          <Collapse
-            defaultActiveKey={['CORE', 'SWITCHING', 'ENDPOINTS']}
-            ghost
-            style={{ color: '#f8fafc' }}
-            items={categories.map(cat => ({
-              key: cat.key,
-              label: (
-                <span style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 600 }}>
-                  {cat.label} ({cat.items.length})
-                </span>
-              ),
-              children: (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {cat.items.map(item => {
-                    const countInBatch = batchSelectedTypes.filter(t => t === item.type).length;
-                    const isSelected = countInBatch > 0;
+          {categories.length > 0 ? (
+            <Collapse
+              key={activeDomain}
+              defaultActiveKey={categories.map(c => c.key)}
+              ghost
+              style={{ color: '#f8fafc' }}
+              items={categories.map(cat => ({
+                key: cat.key,
+                label: (
+                  <span style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 600 }}>
+                    {cat.label} ({cat.items.length})
+                  </span>
+                ),
+                children: (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {cat.items.map(item => {
+                      const countInBatch = batchSelectedTypes.filter(t => t === item.type).length;
+                      const isSelected = countInBatch > 0;
 
-                    return (
-                      <div
-                        key={item.type}
-                        draggable
-                        onDragStart={(e) => {
-                          if (isSelected && batchSelectedTypes.length > 1) {
-                            e.dataTransfer.setData('application/omniflow-components-batch', JSON.stringify(batchSelectedTypes));
-                            e.dataTransfer.effectAllowed = 'copy';
-                          } else {
-                            e.dataTransfer.setData('application/omniflow-component', item.type);
-                            e.dataTransfer.effectAllowed = 'copy';
-                          }
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '8px 10px',
-                          backgroundColor: isSelected ? '#1e3a5f' : '#1e293b',
-                          border: isSelected ? '1px solid #38bdf8' : '1px solid #334155',
-                          borderRadius: 6,
-                          cursor: 'grab',
-                          transition: 'all 0.15s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = '#38bdf8';
-                          if (!isSelected) e.currentTarget.style.backgroundColor = '#243248';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = isSelected ? '#38bdf8' : '#334155';
-                          e.currentTarget.style.backgroundColor = isSelected ? '#1e3a5f' : '#1e293b';
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {batchMode && (
-                            <Checkbox
-                              checked={isSelected}
-                              onChange={() => toggleBatchItem(item.type)}
-                            />
-                          )}
-                          {getIcon(item.type)}
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
-                                {item.name}
+                      return (
+                        <div
+                          key={item.type}
+                          draggable
+                          onDragStart={(e) => {
+                            if (isSelected && batchSelectedTypes.length > 1) {
+                              e.dataTransfer.setData('application/omniflow-components-batch', JSON.stringify(batchSelectedTypes));
+                              e.dataTransfer.effectAllowed = 'copy';
+                            } else {
+                              e.dataTransfer.setData('application/omniflow-component', item.type);
+                              e.dataTransfer.effectAllowed = 'copy';
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 10px',
+                            backgroundColor: isSelected ? '#1e3a5f' : '#1e293b',
+                            border: isSelected ? '1px solid #38bdf8' : '1px solid #334155',
+                            borderRadius: 6,
+                            cursor: 'grab',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#38bdf8';
+                            if (!isSelected) e.currentTarget.style.backgroundColor = '#243248';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = isSelected ? '#38bdf8' : '#334155';
+                            e.currentTarget.style.backgroundColor = isSelected ? '#1e3a5f' : '#1e293b';
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {batchMode && (
+                              <Checkbox
+                                checked={isSelected}
+                                onChange={() => toggleBatchItem(item.type)}
+                              />
+                            )}
+                            {getIcon(item.type)}
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
+                                  {item.name}
+                                </span>
+                                {countInBatch > 0 && (
+                                  <Tag color="#0284c7" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+                                    ×{countInBatch}
+                                  </Tag>
+                                )}
+                              </div>
+                              <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                                {item.portsTemplate.length} ports • {item.defaultCost.currency} ${item.defaultCost.unitCost}
                               </span>
-                              {countInBatch > 0 && (
-                                <Tag color="#0284c7" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-                                  ×{countInBatch}
-                                </Tag>
-                              )}
                             </div>
-                            <span style={{ fontSize: 10, color: '#94a3b8' }}>
-                              {item.portsTemplate.length} ports • {item.defaultCost.currency} ${item.defaultCost.unitCost}
-                            </span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            {batchMode ? (
+                              <Tooltip title="Add 1 more to batch">
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
+                                  onClick={() => addBatchCount(item.type)}
+                                />
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title="Click to add to canvas">
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
+                                  onClick={() => addComponent(item.type, { x: 300, y: 250 })}
+                                />
+                              </Tooltip>
+                            )}
                           </div>
                         </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {batchMode ? (
-                            <Tooltip title="Add 1 more to batch">
-                              <Button
-                                type="text"
-                                size="small"
-                                icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
-                                onClick={() => addBatchCount(item.type)}
-                              />
-                            </Tooltip>
-                          ) : (
-                            <Tooltip title="Click to add to canvas">
-                              <Button
-                                type="text"
-                                size="small"
-                                icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
-                                onClick={() => addComponent(item.type, { x: 300, y: 250 })}
-                              />
-                            </Tooltip>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            }))}
-          />
+                      );
+                    })}
+                  </div>
+                )
+              }))}
+            />
+          ) : (
+            <div style={{ padding: '36px 16px', textAlign: 'center' }}>
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <span style={{ color: '#64748b', fontSize: 12 }}>
+                    {search ? 'No matching equipment found' : `No ${domainMeta.label} components found`}
+                  </span>
+                }
+              />
+            </div>
+          )}
         </div>
       ) : (
         /* Tab 2: Vendor Libraries & Multi-Device Assemblies */
@@ -354,23 +443,19 @@ export const Palette: React.FC = () => {
               {currentLibrary?.assemblies.map(asm => (
                 <div
                   key={asm.id}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('application/omniflow-assembly', JSON.stringify(asm));
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }}
                   style={{
-                    padding: '10px 12px',
                     backgroundColor: '#1e293b',
-                    border: '1px solid #3b82f6',
+                    border: '1px solid #334155',
                     borderRadius: 6,
-                    cursor: 'grab'
+                    padding: '8px 10px',
+                    display: 'flex',
+                    flexDirection: 'column'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f8fafc' }}>
                       {asm.name}
-                    </div>
+                    </span>
                     {asm.estimatedCost && (
                       <Tag color="green" style={{ fontSize: 10 }}>${asm.estimatedCost.toLocaleString()}</Tag>
                     )}

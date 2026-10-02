@@ -92,7 +92,9 @@ export const Canvas: React.FC = () => {
     autoLayout,
     triggerPacketBurst,
     activeDomain,
-    domainFilterMode
+    domainFilterMode,
+    setDomainFilterMode,
+    toggleWizardModal
   } = useGraphStore();
 
   const isNodeVisible = useCallback((node: EngineeringComponent) => {
@@ -1884,6 +1886,89 @@ export const Canvas: React.FC = () => {
             zIndex: 60
           }}
         />
+      )}
+
+      {/* Empty Domain Workspace Guidance Card */}
+      {visibleNodes.length === 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '45%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+            backdropFilter: 'blur(16px)',
+            border: `1px solid ${
+              activeDomain === 'ELECTRICAL' ? '#d97706' :
+              activeDomain === 'PLUMBING' ? '#0284c7' :
+              activeDomain === 'CCTV' ? '#c026d3' :
+              activeDomain === 'SOLAR' ? '#ca8a04' : '#38bdf8'
+            }`,
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.75)',
+            borderRadius: 14,
+            padding: '28px 36px',
+            textAlign: 'center',
+            maxWidth: 520,
+            zIndex: 35,
+            pointerEvents: 'auto'
+          }}
+        >
+          <div style={{ fontSize: 38, marginBottom: 10 }}>
+            {activeDomain === 'ELECTRICAL' ? '⚡' :
+             activeDomain === 'PLUMBING' ? '💧' :
+             activeDomain === 'CCTV' ? '🛡️' :
+             activeDomain === 'SOLAR' ? '☀️' : '🌐'}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 6 }}>
+            {activeDomain === 'ELECTRICAL' ? 'Electrical Power Domain Isolated' :
+             activeDomain === 'PLUMBING' ? 'Plumbing & Cooling Domain Isolated' :
+             activeDomain === 'CCTV' ? 'CCTV & Security Domain Isolated' :
+             activeDomain === 'SOLAR' ? 'Solar & Renewable Energy Domain Isolated' :
+             `${activeDomain} Workspace Isolated`}
+          </div>
+          <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: '1.6', marginBottom: 20 }}>
+            {Object.values(graph.nodes).length > 0 ? (
+              <span>
+                Components from other domains are hidden to clear room for your{' '}
+                <strong style={{ color: '#38bdf8' }}>{activeDomain}</strong> design. Drag components from the Palette, or load the pre-wired {activeDomain.toLowerCase()} topology.
+              </span>
+            ) : (
+              <span>Your canvas is clear and ready for designing.</span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {(activeDomain === 'ELECTRICAL' || activeDomain === 'PLUMBING' || activeDomain === 'CCTV' || activeDomain === 'NETWORK') && (
+              <Button
+                type="primary"
+                icon={activeDomain === 'ELECTRICAL' ? <ThunderboltOutlined /> : activeDomain === 'CCTV' ? <VideoCameraOutlined /> : <BranchesOutlined />}
+                style={{ backgroundColor: '#0284c7', borderColor: '#38bdf8' }}
+                onClick={() => {
+                  loadSystemDesign(activeDomain as any);
+                  message.success(`Loaded ${activeDomain} System Design`);
+                }}
+              >
+                Load {activeDomain === 'ELECTRICAL' ? 'Electrical Distribution' : activeDomain === 'PLUMBING' ? 'Chilled Water Plant' : activeDomain === 'CCTV' ? 'CCTV Matrix' : 'Enterprise Network'} Preset
+              </Button>
+            )}
+            <Button
+              icon={<RocketOutlined />}
+              onClick={() => toggleWizardModal(true)}
+              style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+            >
+              Open Wizard
+            </Button>
+            {Object.values(graph.nodes).length > 0 && domainFilterMode === 'ACTIVE_ONLY' && (
+              <Button
+                type="dashed"
+                onClick={() => setDomainFilterMode('ALL_DOMAINS')}
+                style={{ borderColor: '#64748b', color: '#cbd5e1' }}
+              >
+                Show All Domains Overlay
+              </Button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Floating Multi-Selection Action Toolbar */}

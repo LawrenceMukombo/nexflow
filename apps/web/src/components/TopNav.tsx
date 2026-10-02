@@ -31,6 +31,7 @@ export const TopNav: React.FC = () => {
     activeDomain,
     setActiveDomain,
     domainFilterMode,
+    setDomainFilterMode,
     toggleDomainFilterMode,
     validationIssues,
     toggleValidationDrawer,
@@ -101,7 +102,13 @@ export const TopNav: React.FC = () => {
             value={activeDomain}
             onChange={(val) => {
               setActiveDomain(val);
-              message.info(`Switched active domain to ${val}. Canvas isolated.`);
+              if (val === 'MULTI_DOMAIN') {
+                setDomainFilterMode('ALL_DOMAINS');
+                message.info('Switched to All Domains (Multi-Facility Overlay)');
+              } else {
+                setDomainFilterMode('ACTIVE_ONLY');
+                message.info(`Switched to ${val} domain. Workspace isolated & Palette updated.`);
+              }
             }}
             style={{ width: 145 }}
             size="small"

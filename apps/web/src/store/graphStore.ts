@@ -51,77 +51,66 @@ export interface DesignRevision {
 }
 
 /**
- * Domain membership predicate: checks if an engineering component belongs to the specified domain
+ * Domain membership predicate — checks if an engineering component belongs to the given domain.
+ *
+ * Strategy:
+ *  1. MULTI_DOMAIN mode → show everything
+ *  2. MULTI_DOMAIN nodes (racks, shared infrastructure) → always visible in any domain view
+ *  3. node.domain field is set by the factory from category — trust it first
+ *  4. Fall back to type-keyword matching for legacy / user-created nodes without a proper domain tag
  */
 export function isComponentInDomain(node: EngineeringComponent, domain: EngineeringDomain): boolean {
+  // ── 1. Showing all domains: always visible ───────────────────────────────
   if (domain === 'MULTI_DOMAIN') return true;
+
+  // ── 2. Shared infrastructure nodes are always visible in any domain view ──
   if (node.domain === 'MULTI_DOMAIN' || node.type === 'RACK_HYPERSCALE_42U') return true;
-  
-  if (domain === 'ELECTRICAL') {
-    return (
-      node.domain === 'ELECTRICAL' || 
-      node.domain === 'SOLAR' || 
-      node.type.includes('TRANSFORMER') || 
-      node.type.includes('GENERATOR') || 
-      node.type.includes('UPS') || 
-      node.type.includes('PDU') || 
-      node.type.includes('ATS') || 
-      node.type.includes('SOLAR') || 
-      node.type.includes('INVERTER') || 
-      node.type.includes('BATTERY')
-    );
+
+  // ── 3. Trust the domain field from the factory (set via category) ─────────
+  //    Only fall through to keyword matching if node.domain is unexpected
+  if (domain === 'NETWORK') {
+    if (node.domain === 'NETWORK') return true;
+    // Nodes from non-network domains must never bleed into network view
+    if (node.domain === 'ELECTRICAL' || node.domain === 'SOLAR' || node.domain === 'PLUMBING' || node.domain === 'CCTV') return false;
+    // Keyword fallback for any node lacking a proper domain tag
+    const t = node.type.toUpperCase();
+    const isElec = t.includes('TRANSFORMER') || t.includes('GENERATOR') || t.includes('UPS') || t.includes('PDU') || t.includes('ATS') || t.includes('SOLAR') || t.includes('INVERTER');
+    const isPlumb = t.includes('CHILLER') || t.includes('PUMP') || t.includes('CRAH') || t.includes('WATER_') || t.includes('TANK') || t.includes('TOWER') || t.includes('VALVE');
+    const isCctv = t.includes('_CAM') || t.includes('_NVR') || t.includes('CAMERA') || t.startsWith('NVR') || t.startsWith('DVR');
+    return !isElec && !isPlumb && !isCctv;
   }
-  
-  if (domain === 'PLUMBING') {
-    return (
-      node.domain === 'PLUMBING' || 
-      node.type.includes('CHILLER') || 
-      node.type.includes('PUMP') || 
-      node.type.includes('CRAH') || 
-      node.type.includes('WATER') || 
-      node.type.includes('TANK') || 
-      node.type.includes('TOWER') || 
-      node.type.includes('COOLING') ||
-      node.type.includes('VALVE')
-    );
+
+  if (domain === 'ELECTRICAL') {
+    if (node.domain === 'ELECTRICAL') return true;
+    if (node.domain === 'SOLAR') return true; // Solar is often wired alongside electrical
+    if (node.domain === 'NETWORK' || node.domain === 'PLUMBING' || node.domain === 'CCTV') return false;
+    const t = node.type.toUpperCase();
+    return t.includes('TRANSFORMER') || t.includes('GENERATOR') || t.includes('UPS') || t.includes('PDU') || t.includes('ATS') || t.includes('SOLAR') || t.includes('INVERTER') || t.includes('BATTERY') || t.includes('GRID');
   }
 
   if (domain === 'SOLAR') {
-    return node.domain === 'SOLAR' || node.type.includes('SOLAR') || node.type.includes('INVERTER');
+    if (node.domain === 'SOLAR') return true;
+    if (node.domain === 'NETWORK' || node.domain === 'PLUMBING' || node.domain === 'CCTV') return false;
+    const t = node.type.toUpperCase();
+    return t.includes('SOLAR') || t.includes('PV') || t.includes('INVERTER') || t.includes('BATTERY');
+  }
+
+  if (domain === 'PLUMBING') {
+    if (node.domain === 'PLUMBING') return true;
+    if (node.domain === 'NETWORK' || node.domain === 'ELECTRICAL' || node.domain === 'SOLAR' || node.domain === 'CCTV') return false;
+    const t = node.type.toUpperCase();
+    return t.includes('CHILLER') || t.includes('PUMP') || t.includes('CRAH') || t.includes('WATER_') || t.includes('TANK') || t.includes('COOLING') || t.includes('VALVE') || t.includes('TOWER');
   }
 
   if (domain === 'CCTV') {
-    return (
-      node.domain === 'CCTV' || 
-      node.type.includes('CAM') || 
-      node.type.includes('NVR') || 
-      node.type.includes('ACCESS') ||
-      node.type.includes('SENSOR')
-    );
+    if (node.domain === 'CCTV') return true;
+    if (node.domain === 'NETWORK' || node.domain === 'ELECTRICAL' || node.domain === 'SOLAR' || node.domain === 'PLUMBING') return false;
+    const t = node.type.toUpperCase();
+    // Use specific CCTV keywords — avoid matching ACCESS_POINT (network WiFi)
+    return t.startsWith('CAM') || t.startsWith('NVR') || t.startsWith('DVR') || t.includes('_CAM') || t.includes('CAMERA') || t.includes('ACCESS_CTRL') || t.includes('ALARM') || t.includes('MOTION');
   }
 
-  if (domain === 'NETWORK') {
-    const isElec = (
-      node.domain === 'ELECTRICAL' || 
-      node.domain === 'SOLAR' || 
-      node.type.includes('TRANSFORMER') || 
-      node.type.includes('GENERATOR') || 
-      node.type.includes('UPS') || 
-      node.type.includes('PDU') ||
-      node.type.includes('ATS')
-    );
-    const isPlumb = (
-      node.domain === 'PLUMBING' || 
-      node.type.includes('CHILLER') || 
-      node.type.includes('PUMP') || 
-      node.type.includes('CRAH') || 
-      node.type.includes('WATER') ||
-      node.type.includes('TANK')
-    );
-    if (isElec || isPlumb) return false;
-    return node.domain === 'NETWORK' || !node.domain;
-  }
-
+  // Fallback: strict domain field match
   return node.domain === domain;
 }
 

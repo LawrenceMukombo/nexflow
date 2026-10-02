@@ -842,10 +842,10 @@ export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
     ]
   },
 
-  // === SECURITY, IOT & COLLABORATION ENDPOINTS ===
+  // === SECURITY, CCTV & ACCESS CONTROL ===
   CCTV_CAMERA_PTZ: {
     type: 'CCTV_CAMERA_PTZ',
-    category: 'ENDPOINTS',
+    category: 'CCTV',
     name: '4K Ultra-HD PTZ IP Camera (PoE+)',
     defaultTagPrefix: 'CAM-PTZ',
     description: '30x Optical Zoom 4K Pan-Tilt-Zoom Outdoor Surveillance Camera with IR Night Vision',
@@ -868,9 +868,86 @@ export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
     ]
   },
 
+  CCTV_CAMERA_DOME: {
+    type: 'CCTV_CAMERA_DOME',
+    category: 'CCTV',
+    name: '4K Vandal Dome IP Camera (PoE)',
+    defaultTagPrefix: 'CAM-DOME',
+    description: 'IK10 Vandal-Resistant 4K IR Fixed Dome Indoor/Outdoor Camera with Two-Way Audio',
+    icon: 'VideoCameraOutlined',
+    defaultCost: {
+      partNumber: 'CAM-4K-DOME',
+      manufacturer: 'Hikvision-Compat',
+      unitCost: 450,
+      labourCost: 120,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      ipAddress: '192.168.1.181',
+      defaultGateway: '192.168.1.1',
+      streamBitrateMbps: 6,
+      poeDrawWatts: 12.5
+    },
+    portsTemplate: [
+      { name: 'ETH_POE', type: 'RJ45', direction: 'input', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'], properties: { requiresPoe: true } }
+    ]
+  },
+
+  CCTV_CAMERA_BULLET: {
+    type: 'CCTV_CAMERA_BULLET',
+    category: 'CCTV',
+    name: '4K Long-Range Bullet Camera (PoE)',
+    defaultTagPrefix: 'CAM-BLT',
+    description: '4K Long-Range Bullet Camera with 80m Matrix IR Night Vision & Perimeter Line Crossing AI',
+    icon: 'VideoCameraOutlined',
+    defaultCost: {
+      partNumber: 'CAM-4K-BLT80',
+      manufacturer: 'Dahua-Compat',
+      unitCost: 520,
+      labourCost: 130,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      ipAddress: '192.168.1.182',
+      defaultGateway: '192.168.1.1',
+      streamBitrateMbps: 6,
+      poeDrawWatts: 14.0
+    },
+    portsTemplate: [
+      { name: 'ETH_POE', type: 'RJ45', direction: 'input', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'], properties: { requiresPoe: true } }
+    ]
+  },
+
+  CCTV_NVR_32CH: {
+    type: 'CCTV_NVR_32CH',
+    category: 'CCTV',
+    name: '32-Channel 4K AI Enterprise NVR',
+    defaultTagPrefix: 'NVR',
+    description: '32-Channel 4K Network Video Recorder with 32TB RAID-5 Storage, Dual GbE & AI Analytics',
+    icon: 'DatabaseOutlined',
+    defaultCost: {
+      partNumber: 'NVR-32CH-32TB',
+      manufacturer: 'Axis-Compat',
+      unitCost: 3400,
+      labourCost: 350,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      ipAddress: '192.168.1.185',
+      defaultGateway: '192.168.1.1',
+      channelsSupported: 32,
+      rawStorageTb: 32,
+      poeDrawWatts: 45
+    },
+    portsTemplate: [
+      { name: 'LAN1_UPLINK', type: 'RJ45', direction: 'bidirectional', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'] },
+      { name: 'LAN2_CAMERAS', type: 'RJ45', direction: 'bidirectional', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'] }
+    ]
+  },
+
   ACCESS_CONTROL_PANEL: {
     type: 'ACCESS_CONTROL_PANEL',
-    category: 'ENDPOINTS',
+    category: 'CCTV',
     name: 'IP Access Control Door Controller',
     defaultTagPrefix: 'AC-DOOR',
     description: 'Networked 2-Door Controller with OSDP RFID Reader Interfaces & Magnetic Lock Relays',
@@ -890,6 +967,55 @@ export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
     },
     portsTemplate: [
       { name: 'LAN (PoE)', type: 'RJ45', direction: 'input', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'], properties: { requiresPoe: true } }
+    ]
+  },
+
+  INTERCOM_VIDEO_STATION: {
+    type: 'INTERCOM_VIDEO_STATION',
+    category: 'CCTV',
+    name: 'IP Video Intercom & Door Entry Station',
+    defaultTagPrefix: 'INT-COM',
+    description: 'Tamper-Proof Video Intercom with 2MP Fisheye Camera, RFID Mifare Card Reader & Two-Way HD Audio',
+    icon: 'VideoCameraOutlined',
+    defaultCost: {
+      partNumber: 'INT-COM-2MP',
+      manufacturer: '2N-Compat',
+      unitCost: 1100,
+      labourCost: 180,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      ipAddress: '192.168.1.195',
+      defaultGateway: '192.168.1.1',
+      poeDrawWatts: 12.0
+    },
+    portsTemplate: [
+      { name: 'LAN (PoE)', type: 'RJ45', direction: 'input', capacity: 1000, unit: 'Mbps', compatiblePortTypes: ['RJ45'], properties: { requiresPoe: true } }
+    ]
+  },
+
+  PIR_MOTION_DETECTOR: {
+    type: 'PIR_MOTION_DETECTOR',
+    category: 'CCTV',
+    name: 'Dual-Tech Perimeter PIR Motion Sensor',
+    defaultTagPrefix: 'PIR',
+    description: 'Grade-3 Dual-Tech Microwave & Passive Infrared Perimeter Intrusion Sensor',
+    icon: 'AlertOutlined',
+    defaultCost: {
+      partNumber: 'PIR-PERIM-D3',
+      manufacturer: 'Optex-Compat',
+      unitCost: 320,
+      labourCost: 90,
+      currency: 'USD'
+    },
+    defaultProperties: {
+      ipAddress: '192.168.1.198',
+      defaultGateway: '192.168.1.1',
+      detectionRangeMeters: 24,
+      poeDrawWatts: 5.5
+    },
+    portsTemplate: [
+      { name: 'LAN (PoE)', type: 'RJ45', direction: 'input', capacity: 100, unit: 'Mbps', compatiblePortTypes: ['RJ45'], properties: { requiresPoe: true } }
     ]
   },
 
