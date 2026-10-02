@@ -158,3 +158,73 @@ export interface BOQSummary {
   contingencyAmount: number;
   grandTotal: number;
 }
+
+export interface PortBlueprint {
+  name: string;
+  type: string;
+  direction: 'input' | 'output' | 'bidirectional';
+  capacity: number;
+  unit: string;
+  compatiblePortTypes: string[];
+  properties?: Record<string, unknown>;
+}
+
+export interface ComponentTemplate {
+  type: string;
+  category: 'CORE' | 'SWITCHING' | 'SECURITY' | 'ENDPOINTS' | 'INFRASTRUCTURE' | 'WIRELESS';
+  name: string;
+  defaultTagPrefix: string;
+  description: string;
+  icon: string;
+  defaultCost: CostData;
+  defaultProperties: Record<string, unknown>;
+  portsTemplate: PortBlueprint[];
+}
+
+export interface LibraryAssemblyNode {
+  templateType: string;
+  name: string;
+  tagPrefix: string;
+  relativeX: number;
+  relativeY: number;
+  properties?: Record<string, unknown>;
+  costData?: CostData;
+}
+
+export interface LibraryAssemblyConnection {
+  sourceNodeIndex: number;
+  sourcePortName: string;
+  targetNodeIndex: number;
+  targetPortName: string;
+  connectionType: string;
+  lengthMeters: number;
+}
+
+export interface LibraryAssembly {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  icon?: string;
+  author?: string;
+  version?: string;
+  nodes: LibraryAssemblyNode[];
+  connections: LibraryAssemblyConnection[];
+  tags?: string[];
+  estimatedCost?: number;
+}
+
+export interface ComponentLibrary {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  version: string;
+  author: string;
+  isBuiltIn: boolean;
+  components: ComponentTemplate[];
+  assemblies: LibraryAssembly[];
+  createdAt: string;
+  updatedAt: string;
+}
+

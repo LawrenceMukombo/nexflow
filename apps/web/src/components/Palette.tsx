@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { Input, Collapse, Button, Tooltip, Typography } from 'antd';
+import { 
+  Input, 
+  Collapse, 
+  Button, 
+  Tooltip, 
+  Typography, 
+  Segmented, 
+  Select, 
+  Tag 
+} from 'antd';
 import { 
   SearchOutlined, 
   CloudServerOutlined, 
@@ -17,7 +26,9 @@ import {
   VideoCameraOutlined,
   LockOutlined,
   ThunderboltOutlined,
-  TableOutlined
+  TableOutlined,
+  BookOutlined,
+  AppstoreAddOutlined
 } from '@ant-design/icons';
 import { NETWORK_COMPONENT_CATALOG } from '@omniflow/network-engine';
 import { useGraphStore } from '../store/graphStore';
@@ -25,8 +36,18 @@ import { useGraphStore } from '../store/graphStore';
 const { Text } = Typography;
 
 export const Palette: React.FC = () => {
+  const [tabMode, setTabMode] = useState<'catalog' | 'libraries'>('catalog');
   const [search, setSearch] = useState('');
-  const addComponent = useGraphStore((s) => s.addComponent);
+  
+  const {
+    addComponent,
+    insertAssembly,
+    libraries,
+    activeLibraryId,
+    setActiveLibraryId,
+    toggleLibraryModal,
+    toggleCreateComponentModal
+  } = useGraphStore();
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -35,28 +56,39 @@ export const Palette: React.FC = () => {
       case 'ROUTER_CORE_BGP':
       case 'ROUTER_BRANCH':
       case 'ROUTER_INDUSTRIAL':
+      case 'CISCO_ISR_4451':
         return <PartitionOutlined style={{ color: '#38bdf8', fontSize: 18 }} />;
       case 'FIREWALL_UTM':
       case 'FIREWALL_HA_CLUSTER':
       case 'FIREWALL_EDGE':
+      case 'FORTIGATE_100F':
         return <SafetyCertificateOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
       case 'SWITCH_CORE_L3':
       case 'SWITCH_AGGREGATION_10G':
+      case 'CISCO_CATALYST_9500':
         return <ApartmentOutlined style={{ color: '#818cf8', fontSize: 18 }} />;
       case 'SWITCH_POE_24':
       case 'SWITCH_POE_48':
       case 'SWITCH_MULTIGIG_24':
       case 'SWITCH_DESKTOP_8P':
       case 'SWITCH_INDUSTRIAL_DIN':
+      case 'CISCO_CATALYST_9300':
+      case 'UNIFI_PRO_24_POE':
+      case 'FORTISWITCH_248F_FPOE':
+      case 'MOXA_EDS_510E':
         return <BranchesOutlined style={{ color: '#10b981', fontSize: 18 }} />;
       case 'ACCESS_POINT_WIFI6':
       case 'ACCESS_POINT_OUTDOOR':
       case 'ACCESS_POINT_INWALL':
       case 'WIRELESS_PTP_BRIDGE':
       case 'WLC_CONTROLLER':
+      case 'CISCO_CATALYST_9130AX':
+      case 'UNIFI_U6_PRO':
+      case 'FORTIAP_431F':
         return <WifiOutlined style={{ color: '#f59e0b', fontSize: 18 }} />;
       case 'SERVER_APP':
       case 'STORAGE_NAS_SAN':
+      case 'NVR_ENTERPRISE_32CH':
         return <DatabaseOutlined style={{ color: '#6366f1', fontSize: 18 }} />;
       case 'RACK_CABINET_42U':
       case 'RACK_WALLMOUNT_12U':
@@ -69,8 +101,11 @@ export const Palette: React.FC = () => {
         return <ThunderboltOutlined style={{ color: '#eab308', fontSize: 18 }} />;
       case 'CCTV_CAMERA_PTZ':
       case 'CONFERENCE_BAR':
+      case 'UNIFI_PROTECT_G5_BULLET':
+      case 'CAMERA_FISHEYE_360':
         return <VideoCameraOutlined style={{ color: '#f97316', fontSize: 18 }} />;
       case 'ACCESS_CONTROL_PANEL':
+      case 'ACCESS_CONTROLLER_4DOOR':
         return <LockOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
       case 'WORKSTATION_PC': return <DesktopOutlined style={{ color: '#94a3b8', fontSize: 18 }} />;
       case 'IP_PHONE_VOIP': return <PhoneOutlined style={{ color: '#ec4899', fontSize: 18 }} />;
@@ -95,10 +130,12 @@ export const Palette: React.FC = () => {
     { key: 'ENDPOINTS', label: 'Endpoints, CCTV & IoT', items: filteredItems.filter(i => i.category === 'ENDPOINTS') }
   ];
 
+  const currentLibrary = libraries.find(l => l.id === activeLibraryId) || libraries[0];
+
   return (
     <div
       style={{
-        width: 280,
+        width: 300,
         height: '100%',
         backgroundColor: '#0f172a',
         borderRight: '1px solid #334155',
@@ -107,20 +144,37 @@ export const Palette: React.FC = () => {
         zIndex: 20
       }}
     >
-      {/* Palette Header & Search */}
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid #334155' }}>
+      {/* Palette Header with Mode Selector */}
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid #334155' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <Text strong style={{ color: '#f8fafc', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Component Library
+          <Text strong style={{ color: '#f8fafc', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Equipment & Libraries
           </Text>
-          <span style={{ fontSize: 11, color: '#38bdf8', backgroundColor: 'rgba(56,189,248,0.1)', padding: '2px 6px', borderRadius: 4 }}>
-            NETWORK
-          </span>
+          <Button
+            type="text"
+            size="small"
+            icon={<BookOutlined style={{ color: '#38bdf8' }} />}
+            onClick={() => toggleLibraryModal(true)}
+            style={{ fontSize: 11, color: '#38bdf8' }}
+          >
+            Manager
+          </Button>
         </div>
+
+        <Segmented
+          block
+          value={tabMode}
+          onChange={(val) => setTabMode(val as any)}
+          options={[
+            { label: 'Catalog', value: 'catalog' },
+            { label: 'Libraries & Assemblies', value: 'libraries' }
+          ]}
+          style={{ marginBottom: 10, backgroundColor: '#1e293b' }}
+        />
 
         <Input
           prefix={<SearchOutlined style={{ color: '#64748b' }} />}
-          placeholder="Filter devices..."
+          placeholder={tabMode === 'catalog' ? 'Filter catalog...' : 'Filter library items...'}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
@@ -128,76 +182,210 @@ export const Palette: React.FC = () => {
         />
       </div>
 
-      {/* Palette Categorized Accordions */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
-        <Collapse
-          defaultActiveKey={['CORE', 'SWITCHING', 'ENDPOINTS']}
-          ghost
-          style={{ color: '#f8fafc' }}
-          items={categories.map(cat => ({
-            key: cat.key,
-            label: (
-              <span style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 600 }}>
-                {cat.label} ({cat.items.length})
-              </span>
-            ),
-            children: (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {cat.items.map(item => (
-                  <div
-                    key={item.type}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData('application/omniflow-component', item.type);
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      backgroundColor: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: 6,
-                      cursor: 'grab',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#38bdf8';
-                      e.currentTarget.style.backgroundColor = '#243248';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#334155';
-                      e.currentTarget.style.backgroundColor = '#1e293b';
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      {getIcon(item.type)}
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
-                          {item.name}
-                        </span>
-                        <span style={{ fontSize: 10, color: '#94a3b8' }}>
-                          {item.portsTemplate.length} ports • {item.defaultCost.currency} ${item.defaultCost.unitCost}
-                        </span>
+      {/* Tab 1: Standard Equipment Catalog */}
+      {tabMode === 'catalog' ? (
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+          <Collapse
+            defaultActiveKey={['CORE', 'SWITCHING', 'ENDPOINTS']}
+            ghost
+            style={{ color: '#f8fafc' }}
+            items={categories.map(cat => ({
+              key: cat.key,
+              label: (
+                <span style={{ color: '#cbd5e1', fontSize: 12, fontWeight: 600 }}>
+                  {cat.label} ({cat.items.length})
+                </span>
+              ),
+              children: (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {cat.items.map(item => (
+                    <div
+                      key={item.type}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('application/omniflow-component', item.type);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 10px',
+                        backgroundColor: '#1e293b',
+                        border: '1px solid #334155',
+                        borderRadius: 6,
+                        cursor: 'grab',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#38bdf8';
+                        e.currentTarget.style.backgroundColor = '#243248';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#334155';
+                        e.currentTarget.style.backgroundColor = '#1e293b';
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {getIcon(item.type)}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
+                            {item.name}
+                          </span>
+                          <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                            {item.portsTemplate.length} ports • {item.defaultCost.currency} ${item.defaultCost.unitCost}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    <Tooltip title="Click to add to center">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
-                        onClick={() => addComponent(item.type, { x: 300, y: 250 })}
-                      />
-                    </Tooltip>
+                      <Tooltip title="Click to add to canvas">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
+                          onClick={() => addComponent(item.type, { x: 300, y: 250 })}
+                        />
+                      </Tooltip>
+                    </div>
+                  ))}
+                </div>
+              )
+            }))}
+          />
+        </div>
+      ) : (
+        /* Tab 2: Vendor Libraries & Multi-Device Assemblies */
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
+          {/* Active Library Selector */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>Select Library:</div>
+            <Select
+              value={activeLibraryId}
+              onChange={(val) => setActiveLibraryId(val)}
+              style={{ width: '100%' }}
+              options={libraries.map(lib => ({
+                label: `${lib.name} (${lib.isBuiltIn ? 'Curated' : 'Custom'})`,
+                value: lib.id
+              }))}
+            />
+          </div>
+
+          {/* Assemblies Section */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#38bdf8', textTransform: 'uppercase' }}>
+                Pre-wired Assemblies ({currentLibrary?.assemblies.length || 0})
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {currentLibrary?.assemblies.map(asm => (
+                <div
+                  key={asm.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/omniflow-assembly', JSON.stringify(asm));
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  style={{
+                    padding: '10px 12px',
+                    backgroundColor: '#1e293b',
+                    border: '1px solid #3b82f6',
+                    borderRadius: 6,
+                    cursor: 'grab'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: 12 }}>
+                      {asm.name}
+                    </div>
+                    {asm.estimatedCost && (
+                      <Tag color="green" style={{ fontSize: 10 }}>${asm.estimatedCost.toLocaleString()}</Tag>
+                    )}
                   </div>
-                ))}
-              </div>
-            )
-          }))}
-        />
-      </div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0' }}>
+                    {asm.description.substring(0, 75)}...
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                    <span style={{ fontSize: 10, color: '#38bdf8' }}>
+                      {asm.nodes.length} nodes • {asm.connections.length} links
+                    </span>
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      style={{ fontSize: 11, backgroundColor: '#0284c7' }}
+                      onClick={() => insertAssembly(asm)}
+                    >
+                      Deploy
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Library Components Section */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase' }}>
+                Components ({currentLibrary?.components.length || 0})
+              </span>
+              <Button
+                type="text"
+                size="small"
+                icon={<AppstoreAddOutlined style={{ color: '#10b981' }} />}
+                onClick={() => toggleCreateComponentModal(true)}
+                style={{ fontSize: 11, color: '#10b981' }}
+              >
+                + New
+              </Button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {currentLibrary?.components.map(item => (
+                <div
+                  key={item.type}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/omniflow-component', item.type);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 10px',
+                    backgroundColor: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: 6,
+                    cursor: 'grab'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {getIcon(item.type)}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
+                        {item.name}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                        {item.defaultCost.manufacturer} • ${item.defaultCost.unitCost}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
+                    onClick={() => addComponent(item.type, { x: 300, y: 250 })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

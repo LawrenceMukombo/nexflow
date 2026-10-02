@@ -9,6 +9,9 @@ import { ValidationDrawer } from './components/ValidationDrawer';
 import { BOQModal } from './components/BOQModal';
 import { CableScheduleModal } from './components/CableScheduleModal';
 import { NetworkWizardModal } from './components/NetworkWizardModal';
+import { LibraryManagerModal } from './components/LibraryManagerModal';
+import { CreateComponentModal } from './components/CreateComponentModal';
+import { SaveAssemblyModal } from './components/SaveAssemblyModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -81,6 +84,9 @@ export const App: React.FC = () => {
         <BOQModal />
         <CableScheduleModal />
         <NetworkWizardModal />
+        <LibraryManagerModal />
+        <CreateComponentModal />
+        <SaveAssemblyModal />
       </div>
     </ConfigProvider>
   );

@@ -14,7 +14,9 @@ import {
   ThunderboltFilled,
   BranchesOutlined,
   BuildOutlined,
-  PartitionOutlined
+  PartitionOutlined,
+  BookOutlined,
+  SaveOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -29,6 +31,9 @@ export const TopNav: React.FC = () => {
     toggleBOQModal,
     toggleCableScheduleModal,
     toggleWizardModal,
+    toggleLibraryModal,
+    toggleSaveAssemblyModal,
+    libraries,
     autoLayout,
     isSimulating,
     toggleSimulation,
@@ -144,6 +149,28 @@ export const TopNav: React.FC = () => {
         >
           Topology Wizard
         </Button>
+
+        {/* Libraries Manager */}
+        <Badge count={libraries.length} size="small" offset={[-2, 4]} color="#38bdf8">
+          <Button
+            icon={<BookOutlined style={{ color: '#38bdf8' }} />}
+            onClick={() => toggleLibraryModal(true)}
+            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+          >
+            Libraries
+          </Button>
+        </Badge>
+
+        {/* Save Template Button */}
+        <Tooltip title="Save selected devices or entire design as reusable template">
+          <Button
+            icon={<SaveOutlined style={{ color: '#10b981' }} />}
+            onClick={() => toggleSaveAssemblyModal(true)}
+            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+          >
+            Save Template
+          </Button>
+        </Tooltip>
 
         {/* Auto Layout */}
         <Tooltip title="Organize layout into clean hierarchical tiers">

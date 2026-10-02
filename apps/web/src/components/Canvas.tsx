@@ -22,6 +22,7 @@ export const Canvas: React.FC = () => {
     selectConnection,
     moveComponent,
     addComponent,
+    insertAssembly,
     startConnection,
     completeConnection,
     cancelConnection,
@@ -81,8 +82,7 @@ export const Canvas: React.FC = () => {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const componentType = e.dataTransfer.getData('application/omniflow-component');
-    if (!componentType || !containerRef.current) return;
+    if (!containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
@@ -91,8 +91,23 @@ export const Canvas: React.FC = () => {
     const canvasX = Math.round((clientX - viewport.x) / viewport.zoom);
     const canvasY = Math.round((clientY - viewport.y) / viewport.zoom);
 
-    addComponent(componentType, { x: canvasX, y: canvasY });
-    message.success(`Added ${componentType} to topology`);
+    const assemblyData = e.dataTransfer.getData('application/omniflow-assembly');
+    if (assemblyData) {
+      try {
+        const parsedAsm = JSON.parse(assemblyData);
+        insertAssembly(parsedAsm, { x: canvasX, y: canvasY });
+        message.success(`Deployed assembly "${parsedAsm.name}" to canvas`);
+        return;
+      } catch (err) {
+        console.error('Failed to parse dropped assembly', err);
+      }
+    }
+
+    const componentType = e.dataTransfer.getData('application/omniflow-component');
+    if (componentType) {
+      addComponent(componentType, { x: canvasX, y: canvasY });
+      message.success(`Added ${componentType} to topology`);
+    }
   };
 
   // Helper to compute port screen coordinates for connection lines

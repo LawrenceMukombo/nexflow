@@ -97,4 +97,35 @@ const schedule = generateCableSchedule(testGraph);
 assert(schedule.length === 1, 'Cable schedule generated active runs');
 assert(schedule[0].sourceDevice.includes('RTR-TEST'), 'Origin device correctly labelled in cable schedule');
 
-console.log('=== ALL 8 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+// 9. Component Library & Assembly Engine Test
+import { 
+  BUILTIN_LIBRARIES, 
+  instantiateAssembly, 
+  validateLibraryJson, 
+  exportLibraryToJson, 
+  createAssemblyFromSelection 
+} from '../src/index';
+
+assert(BUILTIN_LIBRARIES.length >= 5, `Built-in libraries verified (${BUILTIN_LIBRARIES.length} curated vendor libraries loaded)`);
+
+const ciscoLib = BUILTIN_LIBRARIES.find(l => l.id === 'lib_cisco_enterprise')!;
+assert(ciscoLib !== undefined, 'Cisco Enterprise Library found in catalog');
+assert(ciscoLib.assemblies.length >= 2, 'Cisco Library includes ready-to-deploy multi-device assemblies');
+
+const unifiOfficeAsm = BUILTIN_LIBRARIES.find(l => l.id === 'lib_ubiquiti_unifi')!.assemblies[0];
+const instantiated = instantiateAssembly(unifiOfficeAsm, { x: 50, y: 50 }, 'test_design');
+assert(instantiated.nodes.length === unifiOfficeAsm.nodes.length, `Assembly instantiated ${instantiated.nodes.length} nodes successfully`);
+assert(instantiated.connections.length === unifiOfficeAsm.connections.length, `Assembly wired ${instantiated.connections.length} inter-device connections`);
+
+// 10. Library JSON Export / Validation Test
+const jsonExport = exportLibraryToJson(ciscoLib);
+const validation = validateLibraryJson(jsonExport);
+assert(validation.valid === true, 'Exported Cisco Library validated cleanly via JSON parser');
+
+// 11. Selection to Assembly Test
+const customAsm = createAssemblyFromSelection('Custom Sub-System', 'Custom', 'Testing custom assembly export', [router, pc], [conn]);
+assert(customAsm.nodes.length === 2, 'Custom assembly correctly extracted selected nodes');
+assert(customAsm.connections.length === 1, 'Custom assembly correctly extracted inter-node connections');
+
+console.log('=== ALL 11 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+

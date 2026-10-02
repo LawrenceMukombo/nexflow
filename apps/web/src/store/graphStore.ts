@@ -6,7 +6,10 @@ import {
   ValidationIssue, 
   SimulationPacket, 
   SimulationTelemetry,
-  EngineeringDomain
+  EngineeringDomain,
+  ComponentLibrary,
+  LibraryAssembly,
+  ComponentTemplate
 } from '@omniflow/shared-types';
 import { 
   createComponentInstance, 
@@ -17,7 +20,14 @@ import {
   findShortestPath,
   generateWizardTopology,
   NetworkWizardOptions,
-  CABLE_CATALOG
+  CABLE_CATALOG,
+  BUILTIN_LIBRARIES,
+  instantiateAssembly,
+  createAssemblyFromSelection,
+  validateLibraryJson,
+  exportLibraryToJson,
+  registerLibraryComponents,
+  NETWORK_COMPONENT_CATALOG
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
@@ -37,6 +47,13 @@ export interface GraphState {
   isBOQModalOpen: boolean;
   isCableScheduleOpen: boolean;
   isWizardOpen: boolean;
+  isLibraryModalOpen: boolean;
+  isCreateComponentModalOpen: boolean;
+  isSaveAssemblyModalOpen: boolean;
+
+  // Libraries & Assemblies
+  libraries: ComponentLibrary[];
+  activeLibraryId: string;
   
   // Simulation
   isSimulating: boolean;
@@ -73,6 +90,20 @@ export interface GraphState {
   toggleCableScheduleModal: (open?: boolean) => void;
   toggleWizardModal: (open?: boolean) => void;
   applyWizardTopology: (options: NetworkWizardOptions) => void;
+
+  // Library & Assembly Actions
+  toggleLibraryModal: (open?: boolean) => void;
+  toggleCreateComponentModal: (open?: boolean) => void;
+  toggleSaveAssemblyModal: (open?: boolean) => void;
+  setActiveLibraryId: (id: string) => void;
+  importLibrary: (jsonString: string) => { success: boolean; message: string };
+  exportLibrary: (libraryId: string) => string | null;
+  addCustomComponent: (libraryId: string, template: ComponentTemplate) => void;
+  addAssembly: (libraryId: string, assembly: LibraryAssembly) => void;
+  insertAssembly: (assembly: LibraryAssembly, position?: { x: number; y: number }) => void;
+  saveSelectionAsAssembly: (name: string, category: string, description: string, targetLibraryId?: string) => LibraryAssembly | null;
+  deleteLibrary: (libraryId: string) => void;
+  deleteCustomComponent: (libraryId: string, componentType: string) => void;
 
   toggleSimulation: (running?: boolean) => void;
   setSimulationSpeed: (speed: number) => void;
@@ -139,6 +170,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isBOQModalOpen: false,
   isCableScheduleOpen: false,
   isWizardOpen: false,
+  isLibraryModalOpen: false,
+  isCreateComponentModalOpen: false,
+  isSaveAssemblyModalOpen: false,
+
+  libraries: BUILTIN_LIBRARIES,
+  activeLibraryId: 'lib_cisco_enterprise',
 
   isSimulating: false,
   simulationSpeed: 1,
@@ -531,6 +568,223 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       ...pushSnapshot({ ...state, graph: newGraph })
     }));
     get().validate();
+  },
+
+  toggleLibraryModal: (open) => {
+    set((state) => ({
+      isLibraryModalOpen: open !== undefined ? open : !state.isLibraryModalOpen
+    }));
+  },
+
+  toggleCreateComponentModal: (open) => {
+    set((state) => ({
+      isCreateComponentModalOpen: open !== undefined ? open : !state.isCreateComponentModalOpen
+    }));
+  },
+
+  toggleSaveAssemblyModal: (open) => {
+    set((state) => ({
+      isSaveAssemblyModalOpen: open !== undefined ? open : !state.isSaveAssemblyModalOpen
+    }));
+  },
+
+  setActiveLibraryId: (id) => {
+    set({ activeLibraryId: id });
+  },
+
+  importLibrary: (jsonString) => {
+    const result = validateLibraryJson(jsonString);
+    if (!result.valid || !result.library) {
+      return { success: false, message: result.error || 'Failed to parse library file' };
+    }
+
+    const newLib = result.library;
+    registerLibraryComponents(newLib);
+
+    set((state) => {
+      // Upsert library by ID
+      const existingIdx = state.libraries.findIndex(l => l.id === newLib.id);
+      let updated: ComponentLibrary[];
+      if (existingIdx >= 0) {
+        updated = [...state.libraries];
+        updated[existingIdx] = newLib;
+      } else {
+        updated = [newLib, ...state.libraries];
+      }
+      return {
+        libraries: updated,
+        activeLibraryId: newLib.id
+      };
+    });
+
+    return { 
+      success: true, 
+      message: `Successfully imported "${newLib.name}" with ${newLib.components.length} components and ${newLib.assemblies.length} assemblies.` 
+    };
+  },
+
+  exportLibrary: (libraryId) => {
+    const { libraries } = get();
+    const lib = libraries.find(l => l.id === libraryId);
+    if (!lib) return null;
+    return exportLibraryToJson(lib);
+  },
+
+  addCustomComponent: (libraryId, template) => {
+    // Register in engine catalog
+    NETWORK_COMPONENT_CATALOG[template.type] = template;
+
+    set((state) => {
+      const updated = state.libraries.map(lib => {
+        if (lib.id === libraryId) {
+          return {
+            ...lib,
+            components: [...lib.components.filter(c => c.type !== template.type), template],
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return lib;
+      });
+      return { libraries: updated };
+    });
+  },
+
+  addAssembly: (libraryId, assembly) => {
+    set((state) => {
+      const updated = state.libraries.map(lib => {
+        if (lib.id === libraryId) {
+          return {
+            ...lib,
+            assemblies: [...lib.assemblies.filter(a => a.id !== assembly.id), assembly],
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return lib;
+      });
+      return { libraries: updated };
+    });
+  },
+
+  insertAssembly: (assembly, position) => {
+    const { graph } = get();
+    const basePos = position || { x: 300, y: 200 };
+    const { nodes: newNodesList, connections: newConnsList } = instantiateAssembly(
+      assembly,
+      basePos,
+      graph.designId
+    );
+
+    const mergedNodes = { ...graph.nodes };
+    for (const n of newNodesList) {
+      mergedNodes[n.id] = n;
+    }
+
+    const mergedConns = { ...graph.connections };
+    for (const c of newConnsList) {
+      mergedConns[c.id] = c;
+    }
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: mergedNodes,
+      connections: mergedConns,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      selectedNodeId: newNodesList[0]?.id || null,
+      selectedConnectionId: null,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+
+    get().validate();
+  },
+
+  saveSelectionAsAssembly: (name, category, description, targetLibraryId) => {
+    const { graph, selectedNodeId, libraries } = get();
+    let selectedNodes: EngineeringComponent[] = [];
+    let selectedConnections: EngineeringConnection[] = [];
+
+    if (selectedNodeId && graph.nodes[selectedNodeId]) {
+      // Find selected node and all directly connected nodes
+      const relatedConns = Object.values(graph.connections).filter(
+        c => c.sourceComponentId === selectedNodeId || c.targetComponentId === selectedNodeId
+      );
+      const connectedNodeIds = new Set<string>([selectedNodeId]);
+      for (const c of relatedConns) {
+        connectedNodeIds.add(c.sourceComponentId);
+        connectedNodeIds.add(c.targetComponentId);
+      }
+      selectedNodes = Array.from(connectedNodeIds).map(id => graph.nodes[id]).filter(Boolean);
+      selectedConnections = relatedConns;
+    } else {
+      // If nothing selected, use all nodes in graph
+      selectedNodes = Object.values(graph.nodes);
+      selectedConnections = Object.values(graph.connections);
+    }
+
+    if (selectedNodes.length === 0) return null;
+
+    const assembly = createAssemblyFromSelection(name, category, description, selectedNodes, selectedConnections);
+
+    // Save into targeted library or active library or create custom user library
+    const libId = targetLibraryId || get().activeLibraryId || 'lib_user_custom';
+    
+    // Check if target library exists
+    const libExists = libraries.some(l => l.id === libId);
+    if (!libExists) {
+      const customLib: ComponentLibrary = {
+        id: libId,
+        name: 'My Custom Hardware & Assemblies',
+        category: 'User Custom',
+        description: 'User created templates and modular assemblies',
+        version: '1.0.0',
+        author: 'Network Designer',
+        isBuiltIn: false,
+        components: [],
+        assemblies: [assembly],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      set(state => ({
+        libraries: [customLib, ...state.libraries],
+        activeLibraryId: customLib.id
+      }));
+    } else {
+      get().addAssembly(libId, assembly);
+    }
+
+    return assembly;
+  },
+
+  deleteLibrary: (libraryId) => {
+    set((state) => {
+      const target = state.libraries.find(l => l.id === libraryId);
+      if (target?.isBuiltIn) return state; // Built-in libraries are protected
+
+      const updated = state.libraries.filter(l => l.id !== libraryId);
+      return {
+        libraries: updated,
+        activeLibraryId: updated[0]?.id || 'lib_cisco_enterprise'
+      };
+    });
+  },
+
+  deleteCustomComponent: (libraryId, componentType) => {
+    set((state) => {
+      const updated = state.libraries.map(lib => {
+        if (lib.id === libraryId && !lib.isBuiltIn) {
+          return {
+            ...lib,
+            components: lib.components.filter(c => c.type !== componentType),
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return lib;
+      });
+      return { libraries: updated };
+    });
   },
 
   sendDirectedPing: (sourceNodeId, targetNodeId) => {
