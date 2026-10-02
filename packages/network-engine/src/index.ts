@@ -7,3 +7,5 @@ export * from './wizard';
 export * from './libraries';
 export * from './enterpriseCatalog';
 export * from './solvers';
+export * from './dxfExporter';
+export * from './drawingSheet';

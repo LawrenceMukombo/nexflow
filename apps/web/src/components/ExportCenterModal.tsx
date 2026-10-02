@@ -1,5 +1,5 @@
-import React from 'react';
-import { Modal, Button, Card, Row, Col, Space, Typography, Tag, message } from 'antd';
+import React, { useState } from 'react';
+import { Modal, Button, Card, Row, Col, Space, Typography, Tag, Input, Form, message } from 'antd';
 import { 
   ExportOutlined, 
   CodeOutlined, 
@@ -8,10 +8,20 @@ import {
   PictureOutlined,
   DownloadOutlined,
   CopyOutlined,
-  BuildOutlined
+  BuildOutlined,
+  PrinterOutlined,
+  CompassOutlined,
+  DeploymentUnitOutlined,
+  FolderOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
-import { generateNetworkBOQ, generateCableSchedule } from '@omniflow/network-engine';
+import { 
+  generateNetworkBOQ, 
+  generateCableSchedule,
+  generateAutoCAD_DXF,
+  generateArchitecturalSheetSvg,
+  generatePrintableSubmittalHtml
+} from '@omniflow/network-engine';
 
 const { Paragraph } = Typography;
 
@@ -22,6 +32,13 @@ export const ExportCenterModal: React.FC = () => {
     isExportCenterModalOpen,
     closeExportCenterModal
   } = useGraphStore();
+
+  // Configurable Drawing Title Block attributes
+  const [drawingNumber, setDrawingNumber] = useState('E-101');
+  const [revision, setRevision] = useState('1.0');
+  const [clientName, setClientName] = useState('Enterprise Hyperscale Facility');
+  const [engineerOfRecord, setEngineerOfRecord] = useState('Principal Infrastructure Engineer');
+  const [peLicenseNumber, setPeLicenseNumber] = useState('PE-89421-US');
 
   if (!isExportCenterModalOpen) return null;
 
@@ -43,17 +60,77 @@ export const ExportCenterModal: React.FC = () => {
     message.success(`Copied ${label} to clipboard`);
   };
 
-  // 1. CANONICAL ENGINEERING GRAPH JSON
+  // 1. AUTOCAD DXF EXPORT
+  const handleExportDXF = (download: boolean) => {
+    const dxfContent = generateAutoCAD_DXF(graph, {
+      projectName: currentProjectName || 'NexFlow System Blueprint',
+      drawingNumber,
+      revision,
+      author: engineerOfRecord,
+      clientName
+    });
+
+    if (download) {
+      downloadFile(`${drawingNumber}_${graph.designId || 'design'}_AutoCAD.dxf`, dxfContent, 'application/dxf');
+    } else {
+      copyToClipboard(dxfContent, 'AutoCAD ASCII DXF');
+    }
+  };
+
+  // 2. ARCHITECTURAL DRAWING SHEET SVG (ANSI D)
+  const handleExportArchitecturalSheetSvg = (download: boolean) => {
+    const svgContent = generateArchitecturalSheetSvg(graph, {
+      projectName: currentProjectName || 'NexFlow System Blueprint',
+      clientName,
+      drawingNumber,
+      revision,
+      author: engineerOfRecord,
+      peLicenseNumber,
+      date: new Date().toISOString().split('T')[0]
+    });
+
+    if (download) {
+      downloadFile(`${drawingNumber}_Architectural_Sheet.svg`, svgContent, 'image/svg+xml');
+    } else {
+      copyToClipboard(svgContent, 'Architectural Sheet SVG');
+    }
+  };
+
+  // 3. PRINTABLE SUBMITTAL HTML / PDF
+  const handleOpenPrintableSubmittal = () => {
+    const htmlContent = generatePrintableSubmittalHtml(graph, {
+      projectName: currentProjectName || 'NexFlow System Blueprint',
+      clientName,
+      drawingNumber,
+      revision,
+      author: engineerOfRecord,
+      peLicenseNumber,
+      date: new Date().toISOString().split('T')[0]
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      message.success('Opened architectural submittal sheet preview');
+    } else {
+      // Fallback: download as standalone HTML
+      downloadFile(`${drawingNumber}_Submittal_Package.html`, htmlContent, 'text/html');
+    }
+  };
+
+  // 4. CANONICAL ENGINEERING GRAPH JSON
   const handleExportJson = (download: boolean) => {
     const jsonString = JSON.stringify(graph, null, 2);
     if (download) {
-      downloadFile(`${graph.designId || 'engineering_design'}_v${graph.metadata?.version || '1.0'}.json`, jsonString, 'application/json');
+      downloadFile(`${graph.designId || 'engineering_design'}_v${revision}.json`, jsonString, 'application/json');
     } else {
       copyToClipboard(jsonString, 'Engineering JSON');
     }
   };
 
-  // 2. BOQ CSV
+  // 5. BOQ CSV
   const handleExportBOQ = (download: boolean) => {
     const boq = generateNetworkBOQ(graph);
     const headers = ['Item Description', 'Category', 'Part Number', 'Quantity', 'Unit Material ($)', 'Unit Labor ($)', 'Total Cost ($)'];
@@ -69,13 +146,13 @@ export const ExportCenterModal: React.FC = () => {
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 
     if (download) {
-      downloadFile(`${graph.designId || 'design'}_BOQ.csv`, csvContent, 'text/csv');
+      downloadFile(`${drawingNumber}_BOQ.csv`, csvContent, 'text/csv');
     } else {
       copyToClipboard(csvContent, 'BOQ CSV');
     }
   };
 
-  // 3. CABLE SCHEDULE CSV
+  // 6. CABLE SCHEDULE CSV
   const handleExportCableSchedule = (download: boolean) => {
     const schedule = generateCableSchedule(graph);
     const headers = ['Cable ID', 'Cable Type', 'Source Device', 'Source Port', 'Target Device', 'Target Port', 'Length (m)'];
@@ -91,80 +168,13 @@ export const ExportCenterModal: React.FC = () => {
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 
     if (download) {
-      downloadFile(`${graph.designId || 'design'}_CableSchedule.csv`, csvContent, 'text/csv');
+      downloadFile(`${drawingNumber}_CableSchedule.csv`, csvContent, 'text/csv');
     } else {
       copyToClipboard(csvContent, 'Cable Schedule CSV');
     }
   };
 
-  // 4. STANDALONE VECTOR SVG SCHEMATIC
-  const handleExportSVG = (download: boolean) => {
-    const nodes = Object.values(graph.nodes);
-    const connections = Object.values(graph.connections);
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    nodes.forEach(n => {
-      minX = Math.min(minX, n.position.x);
-      minY = Math.min(minY, n.position.y);
-      maxX = Math.max(maxX, n.position.x + 220);
-      maxY = Math.max(maxY, n.position.y + 120);
-    });
-    if (nodes.length === 0) { minX = 0; minY = 0; maxX = 1200; maxY = 800; }
-
-    const width = Math.max(1000, maxX - minX + 160);
-    const height = Math.max(700, maxY - minY + 160);
-
-    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX - 80} ${minY - 80} ${width} ${height}" width="${width}" height="${height}" style="background-color: #0b111e; font-family: sans-serif;">
-  <defs>
-    <filter id="card-shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5"/>
-    </filter>
-  </defs>
-
-  <!-- Title Block -->
-  <text x="${minX - 40}" y="${minY - 40}" fill="#f8fafc" font-size="20" font-weight="bold">${currentProjectName || 'Engineering System Blueprint'}</text>
-  <text x="${minX - 40}" y="${minY - 18}" fill="#94a3b8" font-size="12">Generated by NexFlow Engineering Platform • Standard CAD Schematic</text>
-
-  <!-- Cable Paths -->
-  <g id="cables">
-    ${connections.map(c => {
-      const src = graph.nodes[c.sourceComponentId];
-      const tgt = graph.nodes[c.targetComponentId];
-      if (!src || !tgt) return '';
-      const sx = src.position.x + 200;
-      const sy = src.position.y + 40;
-      const tx = tgt.position.x;
-      const ty = tgt.position.y + 40;
-      const color = c.connectionType.includes('POWER') ? '#eab308' : c.connectionType.includes('PIPE') ? '#0284c7' : '#38bdf8';
-      return `<path d="M ${sx} ${sy} C ${sx + 80} ${sy}, ${tx - 80} ${ty}, ${tx} ${ty}" fill="none" stroke="${color}" stroke-width="2.5" />
-      <circle cx="${(sx + tx)/2}" cy="${(sy + ty)/2}" r="12" fill="#090d16" stroke="${color}" stroke-width="1.2"/>
-      <text x="${(sx + tx)/2}" y="${(sy + ty)/2 + 3}" fill="#cbd5e1" font-size="8" text-anchor="middle" font-family="monospace">${c.lengthMeters}m</text>`;
-    }).join('\n')}
-  </g>
-
-  <!-- Component Nodes -->
-  <g id="components">
-    ${nodes.map(n => {
-      return `<g transform="translate(${n.position.x}, ${n.position.y})" filter="url(#card-shadow)">
-        <rect width="200" height="75" rx="8" fill="#0f172a" stroke="#334155" stroke-width="1.5" />
-        <rect width="200" height="22" rx="8" fill="#1e293b" />
-        <text x="12" y="15" fill="#38bdf8" font-size="10" font-weight="bold">${n.tag}</text>
-        <text x="12" y="42" fill="#f8fafc" font-size="11" font-weight="600">${n.name}</text>
-        <text x="12" y="60" fill="#94a3b8" font-size="9" font-family="monospace">${n.properties.ipAddress || n.properties.voltage || n.type}</text>
-      </g>`;
-    }).join('\n')}
-  </g>
-</svg>`;
-
-    if (download) {
-      downloadFile(`${graph.designId || 'design'}_Schematic.svg`, svgContent, 'image/svg+xml');
-    } else {
-      copyToClipboard(svgContent, 'SVG Vector Schematic');
-    }
-  };
-
-  // 5. TECHNICAL MARKDOWN SPECIFICATION
+  // 7. TECHNICAL MARKDOWN SPECIFICATION
   const handleExportMarkdown = (download: boolean) => {
     const nodes = Object.values(graph.nodes);
     const connections = Object.values(graph.connections);
@@ -172,10 +182,12 @@ export const ExportCenterModal: React.FC = () => {
 
     const mdContent = `# Engineering Design Specification: ${currentProjectName || 'System Blueprint'}
 
-**Design ID:** \`${graph.designId}\`  
-**Revision:** \`${graph.metadata?.version || '1.0'}\`  
+**Drawing Number:** \`${drawingNumber}\`  
+**Design ID:** \`${graph.designId || 'ENG-001'}\`  
+**Revision:** \`${revision}\`  
+**Client / Facility:** ${clientName}  
+**Lead Engineer:** ${engineerOfRecord} (${peLicenseNumber})  
 **Generated Date:** ${new Date().toISOString()}  
-**Lead Engineer:** ${graph.metadata?.author || 'Principal Infrastructure Architect'}  
 
 ---
 
@@ -197,46 +209,168 @@ ${connections.map(c => `| \`${c.id}\` | **${c.connectionType}** | ${graph.nodes[
 ---
 
 ## 3. Bill of Quantities (BOQ)
-- **Total Material Cost:** $${boq.totalMaterials.toLocaleString()}
-- **Total Installation Labor:** $${boq.totalLabour.toLocaleString()}
-- **Tax (15%):** $${boq.taxAmount.toLocaleString()}
+- **Total Material Cost:** $${boq.totalMaterials.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- **Total Installation Labor:** $${boq.totalLabour.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+- **Tax (15%):** $${boq.taxAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
 - **Grand Estimated Capital Expenditure:** **$${boq.grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}**
 
-*Generated via NexFlow Enterprise Engineering Platform.*
+---
+
+## 4. Applicable Standards
+- **NFPA 70 / NEC 2023**: National Electrical Code (Branch <3% ΔV)
+- **IEEE 141 (Red Book)**: Coincident & Maximum Demand Electrical Loading
+- **ASHRAE 90.1 / 188**: Hydronic Chilled Water Velocity & Energy Conservation
+- **ANSI/TIA-568-D**: Commercial Building Telecommunications Cabling
+
+*Certified electronic submittal generated via NexFlow Enterprise Engineering Platform.*
 `;
 
     if (download) {
-      downloadFile(`${graph.designId || 'design'}_Specification.md`, mdContent, 'text/markdown');
+      downloadFile(`${drawingNumber}_Specification.md`, mdContent, 'text/markdown');
     } else {
       copyToClipboard(mdContent, 'Markdown Specification');
     }
   };
 
+  // 8. MASTER SUBMITTAL BUNDLE DOWNLOAD (Exports all key artifacts sequentially)
+  const handleExportFullSubmittalBundle = () => {
+    message.loading({ content: 'Packaging multi-domain submittal artifacts...', key: 'bundle' });
+    setTimeout(() => {
+      handleExportDXF(true);
+      setTimeout(() => handleExportArchitecturalSheetSvg(true), 250);
+      setTimeout(() => handleExportBOQ(true), 500);
+      setTimeout(() => handleExportCableSchedule(true), 750);
+      setTimeout(() => handleExportMarkdown(true), 1000);
+      message.success({ content: 'Complete engineering submittal pack downloaded!', key: 'bundle' });
+    }, 400);
+  };
+
   return (
     <Modal
       title={
-        <Space>
-          <ExportOutlined style={{ color: '#0284c7', fontSize: 18 }} />
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Multi-Format Engineering Export Suite</span>
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 24 }}>
+          <Space>
+            <ExportOutlined style={{ color: '#0284c7', fontSize: 18 }} />
+            <span style={{ fontWeight: 700, fontSize: 16 }}>Multi-Format Engineering Export Suite</span>
+            <Tag color="#0284c7">CAD & BIM Interchange</Tag>
+          </Space>
+          <Button 
+            type="primary" 
+            icon={<FolderOutlined />} 
+            onClick={handleExportFullSubmittalBundle}
+            style={{ backgroundColor: '#10b981', borderColor: '#10b981', fontWeight: 600 }}
+          >
+            Export Complete Submittal Pack
+          </Button>
+        </div>
       }
       open={isExportCenterModalOpen}
       onCancel={closeExportCenterModal}
-      width={860}
+      width={980}
       footer={[
         <Button key="close" onClick={closeExportCenterModal}>
           Close
         </Button>
       ]}
-      style={{ top: 30 }}
+      style={{ top: 25 }}
+      styles={{ body: { maxHeight: '82vh', overflowY: 'auto', paddingRight: 8 } }}
     >
-      <div style={{ color: '#f8fafc', padding: '6px 0' }}>
+      <div style={{ color: '#f8fafc', padding: '4px 0' }}>
+        {/* Title Block Parameters Header */}
+        <Card 
+          size="small"
+          title={<Space><CompassOutlined style={{ color: '#38bdf8' }} /><span style={{ color: '#f8fafc', fontSize: 13 }}>Drawing Title Block & Sheet Parameters</span></Space>}
+          style={{ backgroundColor: '#090d16', borderColor: '#1e293b', marginBottom: 16 }}
+        >
+          <Form layout="inline" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
+            <Form.Item label={<span style={{ color: '#94a3b8', fontSize: 12 }}>Dwg No.</span>} style={{ margin: 0 }}>
+              <Input 
+                value={drawingNumber} 
+                onChange={e => setDrawingNumber(e.target.value)} 
+                style={{ width: 90, backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', fontWeight: 'bold' }} 
+              />
+            </Form.Item>
+            <Form.Item label={<span style={{ color: '#94a3b8', fontSize: 12 }}>Rev</span>} style={{ margin: 0 }}>
+              <Input 
+                value={revision} 
+                onChange={e => setRevision(e.target.value)} 
+                style={{ width: 65, backgroundColor: '#0f172a', borderColor: '#334155', color: '#10b981', fontWeight: 'bold' }} 
+              />
+            </Form.Item>
+            <Form.Item label={<span style={{ color: '#94a3b8', fontSize: 12 }}>Client</span>} style={{ margin: 0 }}>
+              <Input 
+                value={clientName} 
+                onChange={e => setClientName(e.target.value)} 
+                style={{ width: 200, backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }} 
+              />
+            </Form.Item>
+            <Form.Item label={<span style={{ color: '#94a3b8', fontSize: 12 }}>Lead Engineer</span>} style={{ margin: 0 }}>
+              <Input 
+                value={engineerOfRecord} 
+                onChange={e => setEngineerOfRecord(e.target.value)} 
+                style={{ width: 210, backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }} 
+              />
+            </Form.Item>
+            <Form.Item label={<span style={{ color: '#94a3b8', fontSize: 12 }}>PE Stamp No.</span>} style={{ margin: 0 }}>
+              <Input 
+                value={peLicenseNumber} 
+                onChange={e => setPeLicenseNumber(e.target.value)} 
+                style={{ width: 130, backgroundColor: '#0f172a', borderColor: '#334155', color: '#dc2626', fontWeight: 'bold' }} 
+              />
+            </Form.Item>
+          </Form>
+        </Card>
+
         <Paragraph style={{ color: '#94a3b8', fontSize: 13, marginBottom: 16 }}>
-          Export the active engineering model into industry-standard interchange formats for CAD systems, procurement spreadsheets, documentation, or automated CI/CD pipeline validation.
+          Generate certified engineering drawings, CAD interchange models, and procurement schedules compliant with IEEE, NFPA 70, ASHRAE, and TIA standards.
         </Paragraph>
 
         <Row gutter={[16, 16]}>
-          {/* Format 1: Canonical Engineering JSON */}
+          {/* Format 1: AutoCAD DXF Engineering Interchange */}
+          <Col span={12}>
+            <Card 
+              size="small" 
+              title={<Space><DeploymentUnitOutlined style={{ color: '#eab308' }} /><span style={{ color: '#f8fafc' }}>AutoCAD DXF Engineering Interchange</span></Space>}
+              extra={<Tag color="#eab308">AutoCAD / Revit</Tag>}
+              style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
+            >
+              <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
+                Layered ASCII DXF (AC1009/R12) with dedicated layers for data cabling, power conduits, chilled water hydronics, equipment blocks, and title blocks.
+              </Paragraph>
+              <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportDXF(true)} style={{ backgroundColor: '#eab308', borderColor: '#eab308', color: '#090d16', fontWeight: 600 }}>
+                  Download .dxf
+                </Button>
+                <Button size="small" icon={<CopyOutlined />} onClick={() => handleExportDXF(false)}>
+                  Copy DXF Text
+                </Button>
+              </div>
+            </Card>
+          </Col>
+
+          {/* Format 2: Architectural Drawing Sheet (ANSI D) */}
+          <Col span={12}>
+            <Card 
+              size="small" 
+              title={<Space><PictureOutlined style={{ color: '#10b981' }} /><span style={{ color: '#f8fafc' }}>Architectural Single-Line Drawing Sheet</span></Space>}
+              extra={<Tag color="#10b981">ANSI D / ISO A1</Tag>}
+              style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
+            >
+              <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
+                Standard 2400x1600 architectural vector sheet featuring grid coordinates (A-F, 1-8), title block, revision table, PE seal stamp, and code compliance audits.
+              </Paragraph>
+              <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportArchitecturalSheetSvg(true)} style={{ backgroundColor: '#10b981', borderColor: '#10b981', fontWeight: 600 }}>
+                  Download .svg Sheet
+                </Button>
+                <Button size="small" icon={<PrinterOutlined />} onClick={handleOpenPrintableSubmittal}>
+                  Print / Save PDF
+                </Button>
+              </div>
+            </Card>
+          </Col>
+
+          {/* Format 3: Canonical Engineering Graph JSON */}
           <Col span={12}>
             <Card 
               size="small" 
@@ -245,7 +379,7 @@ ${connections.map(c => `| \`${c.id}\` | **${c.connectionType}** | ${graph.nodes[
               style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
             >
               <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
-                Complete structured model with nodes, typed ports, geometric positions, domain properties, constraints, and telemetry bindings.
+                Complete structured model with nodes, typed ports, geometric positions, domain properties, constraints, and telemetry bindings for CI/CD automation.
               </Paragraph>
               <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
                 <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportJson(true)} style={{ backgroundColor: '#0284c7' }}>
@@ -258,41 +392,19 @@ ${connections.map(c => `| \`${c.id}\` | **${c.connectionType}** | ${graph.nodes[
             </Card>
           </Col>
 
-          {/* Format 2: Vector SVG Schematic */}
+          {/* Format 4: BOQ Equipment Cost Schedule CSV */}
           <Col span={12}>
             <Card 
               size="small" 
-              title={<Space><PictureOutlined style={{ color: '#10b981' }} /><span style={{ color: '#f8fafc' }}>Vector SVG Schematic Diagram</span></Space>}
-              extra={<Tag color="#10b981">Vector Graphics</Tag>}
+              title={<Space><FileExcelOutlined style={{ color: '#f59e0b' }} /><span style={{ color: '#f8fafc' }}>Bill of Quantities (BOQ) Spreadsheet</span></Space>}
+              extra={<Tag color="#f59e0b">Excel / CSV</Tag>}
               style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
             >
               <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
-                Resolution-independent vector schematic with component chassis cards, port pinouts, and curved bezier cable runs ready for publication.
+                Structured CSV table with itemized hardware part numbers, quantities, material costs, labor rates, and total capital expenditure for procurement.
               </Paragraph>
               <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportSVG(true)} style={{ backgroundColor: '#10b981' }}>
-                  Download .svg
-                </Button>
-                <Button size="small" icon={<CopyOutlined />} onClick={() => handleExportSVG(false)}>
-                  Copy SVG
-                </Button>
-              </div>
-            </Card>
-          </Col>
-
-          {/* Format 3: BOQ Equipment Cost Schedule CSV */}
-          <Col span={12}>
-            <Card 
-              size="small" 
-              title={<Space><FileExcelOutlined style={{ color: '#eab308' }} /><span style={{ color: '#f8fafc' }}>Bill of Quantities (BOQ) Spreadsheet</span></Space>}
-              extra={<Tag color="#eab308">Excel / CSV</Tag>}
-              style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
-            >
-              <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
-                Structured CSV table with itemized hardware part numbers, quantities, material costs, labor rates, and total capital expenditure.
-              </Paragraph>
-              <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportBOQ(true)} style={{ backgroundColor: '#eab308' }}>
+                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportBOQ(true)} style={{ backgroundColor: '#f59e0b', borderColor: '#f59e0b' }}>
                   Download BOQ.csv
                 </Button>
                 <Button size="small" icon={<CopyOutlined />} onClick={() => handleExportBOQ(false)}>
@@ -302,20 +414,20 @@ ${connections.map(c => `| \`${c.id}\` | **${c.connectionType}** | ${graph.nodes[
             </Card>
           </Col>
 
-          {/* Format 4: Structured Cabling Run Schedule CSV */}
+          {/* Format 5: Structured Cabling Run Schedule CSV */}
           <Col span={12}>
             <Card 
               size="small" 
-              title={<Space><BuildOutlined style={{ color: '#06b6d4' }} /><span style={{ color: '#f8fafc' }}>Cabling & Patch Schedule</span></Space>}
-              extra={<Tag color="#06b6d4">Installer Schedule</Tag>}
+              title={<Space><BuildOutlined style={{ color: '#06b6d4' }} /><span style={{ color: '#f8fafc' }}>Cabling & Conduit Run Schedule</span></Space>}
+              extra={<Tag color="#06b6d4">Field Schedule</Tag>}
               style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
             >
               <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
-                Field installation schedule detailing point-to-point terminations, media categories (CAT6A, Fiber, 400V), lengths, and port IDs.
+                Field installation schedule detailing point-to-point terminations, media categories (CAT6A, Fiber, 400V, Chilled Water), lengths, and port IDs.
               </Paragraph>
               <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportCableSchedule(true)} style={{ backgroundColor: '#06b6d4' }}>
-                  Download CableSchedule.csv
+                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportCableSchedule(true)} style={{ backgroundColor: '#06b6d4', borderColor: '#06b6d4' }}>
+                  Download Schedule.csv
                 </Button>
                 <Button size="small" icon={<CopyOutlined />} onClick={() => handleExportCableSchedule(false)}>
                   Copy CSV
@@ -324,19 +436,19 @@ ${connections.map(c => `| \`${c.id}\` | **${c.connectionType}** | ${graph.nodes[
             </Card>
           </Col>
 
-          {/* Format 5: Technical Specification Markdown */}
-          <Col span={24}>
+          {/* Format 6: Technical Specification Markdown */}
+          <Col span={12}>
             <Card 
               size="small" 
-              title={<Space><FileTextOutlined style={{ color: '#a855f7' }} /><span style={{ color: '#f8fafc' }}>Technical Specification Document (Markdown)</span></Space>}
+              title={<Space><FileTextOutlined style={{ color: '#a855f7' }} /><span style={{ color: '#f8fafc' }}>Technical Specification Document (MD)</span></Space>}
               extra={<Tag color="#a855f7">Documentation</Tag>}
               style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }}
             >
-              <Paragraph style={{ color: '#cbd5e1', fontSize: 12, margin: 0 }}>
-                Standard GitHub-compatible Markdown document containing the complete system specification, equipment inventory tables, cabling run matrix, and cost summaries for repository documentation or wiki pages.
+              <Paragraph style={{ color: '#cbd5e1', fontSize: 12, minHeight: 48, margin: 0 }}>
+                GitHub-compatible Markdown document containing the complete system specification, equipment inventory tables, cabling matrix, and standards compliance.
               </Paragraph>
               <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportMarkdown(true)} style={{ backgroundColor: '#a855f7' }}>
+                <Button size="small" icon={<DownloadOutlined />} type="primary" onClick={() => handleExportMarkdown(true)} style={{ backgroundColor: '#a855f7', borderColor: '#a855f7' }}>
                   Download Spec.md
                 </Button>
                 <Button size="small" icon={<CopyOutlined />} onClick={() => handleExportMarkdown(false)}>
