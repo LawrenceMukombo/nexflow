@@ -7,7 +7,9 @@ import {
   calculateLinkTransitTimeMs, 
   stepNetworkSimulation, 
   generateNetworkBOQ, 
-  generateCableSchedule 
+  generateCableSchedule,
+  checkNodeNetworkConfig,
+  areInSameSubnet
 } from '../src/index';
 import { EngineeringGraph } from '@omniflow/shared-types';
 
@@ -87,6 +89,30 @@ const dupIpIssue = issues.find(i => i.ruleCode === 'NET_DUPLICATE_IP');
 assert(dupIpIssue !== undefined, 'Validation engine automatically flagged NET_DUPLICATE_IP');
 assert(dupIpIssue?.severity === 'CRITICAL', 'Duplicate IP is marked as CRITICAL severity');
 
+// 6b. Subnet Mismatch & Connection Blocking Test
+assert(!areInSameSubnet('191.168.1.101', '192.168.1.1'), '191.168.1.101 and 192.168.1.1 are correctly identified as different subnets');
+pc.properties.ipAddress = '191.168.1.101'; // Wrong subnet
+pc.properties.defaultGateway = '192.168.1.1';
+router.properties.lanIp = '192.168.1.1';
+
+const misconfigStatus = checkNodeNetworkConfig(pc, testGraph);
+assert(misconfigStatus.canConnect === false, 'Misconfigured device (191.168.1.101) cannot connect to network');
+assert(misconfigStatus.statusText === 'SUBNET_MISMATCH', 'Status correctly classified as SUBNET_MISMATCH');
+
+const subnetIssues = validateNetworkGraph(testGraph);
+const subnetIssue = subnetIssues.find(i => i.ruleCode === 'NET_SUBNET_MISMATCH');
+assert(subnetIssue !== undefined, 'Validation engine flagged NET_SUBNET_MISMATCH as CRITICAL');
+
+// Route must be blocked
+const blockedRoute = findShortestPath(testGraph, router.id, pc.id);
+assert(blockedRoute === null, 'Transmission blocked: Cannot route to device with wrong subnet/IP settings');
+
+// Restore nominal IP
+pc.properties.ipAddress = '192.168.1.101';
+const restoredRoute = findShortestPath(testGraph, router.id, pc.id);
+assert(restoredRoute !== null && restoredRoute.length === 1, 'Transmission restored when IP matches network subnet');
+delete testGraph.nodes[pc2.id];
+
 // 7. BOQ Generation Test
 const boq = generateNetworkBOQ(testGraph);
 assert(boq.items.length >= 2, 'BOQ aggregates hardware equipment and cabling items');
@@ -102,8 +128,7 @@ import {
   BUILTIN_LIBRARIES, 
   instantiateAssembly, 
   validateLibraryJson, 
-  exportLibraryToJson, 
-  createAssemblyFromSelection 
+  exportLibraryToJson 
 } from '../src/index';
 
 assert(BUILTIN_LIBRARIES.length >= 5, `Built-in libraries verified (${BUILTIN_LIBRARIES.length} curated vendor libraries loaded)`);

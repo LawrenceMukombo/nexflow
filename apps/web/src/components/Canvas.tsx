@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
-import { Tag, Badge, message, Dropdown, MenuProps, Button } from 'antd';
+import { Tag, Badge, message, Dropdown, MenuProps, Button, Tooltip } from 'antd';
 import { 
   PlusOutlined,
   MinusOutlined,
@@ -30,6 +30,7 @@ import {
   SaveOutlined
 } from '@ant-design/icons';
 import { ComponentPort, EngineeringComponent, EngineeringConnection } from '@omniflow/shared-types';
+import { checkNodeNetworkConfig } from '@omniflow/network-engine';
 import { ComponentIcon } from './ComponentIcon';
 
 export const Canvas: React.FC = () => {
@@ -1318,12 +1319,16 @@ export const Canvas: React.FC = () => {
               return '#3b82f6';
             };
 
-            const cableColor = getCableColor();
+            const srcNet = srcNode ? checkNodeNetworkConfig(srcNode, graph) : { canConnect: true };
+            const tgtNet = tgtNode ? checkNodeNetworkConfig(tgtNode, graph) : { canConnect: true };
+            const isIpBlocked = !srcNet.canConnect || !tgtNet.canConnect;
+
+            const cableColor = isIpBlocked ? '#ef4444' : getCableColor();
             const midX = (start.x + end.x) / 2;
             const midY = (start.y + end.y) / 2;
 
-            // Determine if flow is active on this connection
-            const isFlowAllowed = isSimulating && !isFailed && (
+            // Determine if flow is active on this connection (Blocked if wrong IP/settings)
+            const isFlowAllowed = isSimulating && !isFailed && !isIpBlocked && (
               (isElectrical && showElectricFlow) ||
               (isFluid && showFluidFlow) ||
               (isVideo && showVideoFlow) ||
@@ -1379,7 +1384,7 @@ export const Canvas: React.FC = () => {
                   fill="none"
                   stroke={cableColor}
                   strokeWidth={isSelected ? 10 : isFluid ? 9 : 7}
-                  strokeOpacity={0.25}
+                  strokeOpacity={isIpBlocked ? 0.4 : 0.25}
                   strokeLinecap="round"
                 />
 
@@ -1389,7 +1394,7 @@ export const Canvas: React.FC = () => {
                   fill="none"
                   stroke={cableColor}
                   strokeWidth={isSelected ? 4 : isFluid ? 4 : 2.8}
-                  strokeDasharray={isFailed ? '6,4' : undefined}
+                  strokeDasharray={isFailed || isIpBlocked ? '6,4' : undefined}
                   strokeLinecap="round"
                   style={{ transition: 'stroke 0.2s, stroke-width 0.2s' }}
                 />
@@ -1423,9 +1428,9 @@ export const Canvas: React.FC = () => {
                 {/* High-Contrast Cable Type & Length Badge Pill */}
                 <g transform={`translate(${midX}, ${midY - 10})`}>
                   <rect
-                    x={-52}
+                    x={isIpBlocked ? -65 : -52}
                     y={-10}
-                    width={104}
+                    width={isIpBlocked ? 130 : 104}
                     height={20}
                     rx={10}
                     fill="#0b111e"
@@ -1435,15 +1440,18 @@ export const Canvas: React.FC = () => {
                   <text
                     x={0}
                     y={4}
-                    fill="#f8fafc"
+                    fill={isIpBlocked ? '#fca5a5' : '#f8fafc'}
                     fontSize="9.5"
                     fontWeight="600"
                     fontFamily="monospace"
                     textAnchor="middle"
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
-                    {isElectrical ? '⚡ ' : isFluid ? '💧 ' : isVideo ? '📹 ' : ''}
-                    {conn.connectionType.replace('POWER_', '').replace('PIPE_', '')} • {conn.lengthMeters}m
+                    {isIpBlocked ? (
+                      '⛔ LINK DOWN (WRONG IP)'
+                    ) : (
+                      `${isElectrical ? '⚡ ' : isFluid ? '💧 ' : isVideo ? '📹 ' : ''}${conn.connectionType.replace('POWER_', '').replace('PIPE_', '')} • ${conn.lengthMeters}m`
+                    )}
                   </text>
                 </g>
               </g>
@@ -1579,6 +1587,9 @@ export const Canvas: React.FC = () => {
           const isSelected = (selectedNodeIds && selectedNodeIds.includes(node.id)) || selectedNodeId === node.id;
           const isFailed = node.simulationState.isFailed;
 
+          const netStatus = checkNodeNetworkConfig(node, graph);
+          const isNetMisconfigured = !netStatus.canConnect;
+
           const ip = (node.properties.ipAddress || node.properties.lanIp || node.properties.managementIp) as string;
           const isElecNode = node.domain === 'ELECTRICAL' || node.domain === 'SOLAR' || node.type.includes('TRANSFORMER') || node.type.includes('GENERATOR') || node.type.includes('UPS') || node.type.includes('PDU') || node.type.includes('SOLAR');
           const isPlumbNode = node.domain === 'PLUMBING' || node.type.includes('CHILLER') || node.type.includes('PUMP') || node.type.includes('CRAH') || node.type.includes('WATER') || node.type.includes('TOWER') || node.type.includes('TANK');
@@ -1647,12 +1658,12 @@ export const Canvas: React.FC = () => {
                 left: node.position.x,
                 top: node.position.y,
                 width: 210,
-                backgroundColor: isFailed ? '#1a0b0e' : '#0f172a',
+                backgroundColor: isFailed || isNetMisconfigured ? '#1a0b0e' : '#0f172a',
                 borderRadius: 8,
                 border: isSelected 
                   ? '2px solid #38bdf8' 
-                  : isFailed 
-                  ? '1px solid #ef4444' 
+                  : isFailed || isNetMisconfigured
+                  ? '2px solid #ef4444' 
                   : isElecNode 
                   ? '1px solid #715509' 
                   : isPlumbNode 
@@ -1662,8 +1673,8 @@ export const Canvas: React.FC = () => {
                   : '1px solid #334155',
                 boxShadow: isSelected 
                   ? '0 0 16px rgba(56, 189, 248, 0.35)' 
-                  : isFailed 
-                  ? '0 0 12px rgba(239, 68, 68, 0.35)' 
+                  : isFailed || isNetMisconfigured 
+                  ? '0 0 14px rgba(239, 68, 68, 0.45)' 
                   : isElecNode
                   ? '0 4px 12px rgba(234, 179, 8, 0.12)'
                   : isPlumbNode
@@ -1681,7 +1692,7 @@ export const Canvas: React.FC = () => {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   padding: '6px 10px',
-                  backgroundColor: isFailed 
+                  backgroundColor: isFailed || isNetMisconfigured
                     ? '#450a0a' 
                     : isElecNode 
                     ? '#291d04' 
@@ -1699,7 +1710,7 @@ export const Canvas: React.FC = () => {
                   <ComponentIcon type={node.type} domain={node.domain} size={15} />
                   <Tag 
                     color={
-                      isFailed 
+                      isFailed || isNetMisconfigured
                         ? 'error' 
                         : isElecNode 
                         ? 'gold' 
@@ -1713,14 +1724,25 @@ export const Canvas: React.FC = () => {
                   >
                     {node.tag}
                   </Tag>
+                  {isNetMisconfigured && (
+                    <Tag color="error" style={{ margin: 0, fontSize: 9, fontWeight: 700, padding: '0 4px', lineHeight: '14px' }}>
+                      IP ERROR
+                    </Tag>
+                  )}
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#f8fafc' }}>
                     {node.type.replace('_', ' ').slice(0, 14)}
                   </span>
                 </div>
 
                 <Badge
-                  status={isFailed ? 'error' : 'success'}
-                  title={isFailed ? 'DEVICE OFFLINE / FAULT' : 'ONLINE'}
+                  status={isFailed || isNetMisconfigured ? 'error' : 'success'}
+                  title={
+                    isFailed 
+                      ? 'DEVICE OFFLINE / FAULT' 
+                      : isNetMisconfigured 
+                      ? `DISCONNECTED: ${netStatus.reason}` 
+                      : 'ONLINE'
+                  }
                 />
               </div>
 
@@ -1776,9 +1798,43 @@ export const Canvas: React.FC = () => {
                 {!isElecNode && !isPlumbNode && !isMultiDomainNode && (
                   <>
                     {ip && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontFamily: 'monospace' }}>
-                        <span style={{ color: '#64748b' }}>IP:</span>
-                        <span style={{ color: '#38bdf8', fontWeight: 500 }}>{ip}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, fontFamily: 'monospace' }}>
+                        <span style={{ color: isNetMisconfigured ? '#ef4444' : '#64748b' }}>IP:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ 
+                            color: isNetMisconfigured ? '#ef4444' : '#38bdf8', 
+                            fontWeight: isNetMisconfigured ? 700 : 500,
+                            textDecoration: isNetMisconfigured ? 'line-through' : 'none'
+                          }}>
+                            {ip}
+                          </span>
+                          {isNetMisconfigured && (
+                            <Tooltip title={netStatus.reason}>
+                              <Tag color="error" style={{ margin: 0, padding: '0 3px', fontSize: 8.5, lineHeight: '12px', cursor: 'help' }}>
+                                MISMATCH
+                              </Tag>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {isNetMisconfigured && (
+                      <div style={{
+                        fontSize: 9.5,
+                        color: '#fca5a5',
+                        backgroundColor: '#450a0a',
+                        padding: '3px 6px',
+                        borderRadius: 4,
+                        marginTop: 2,
+                        border: '1px solid #dc2626',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        <span>⛔</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {netStatus.statusText === 'SUBNET_MISMATCH' ? 'Wrong Subnet (No Link)' : 'IP Config Error'}
+                        </span>
                       </div>
                     )}
                     {node.properties.vlanId !== undefined && (

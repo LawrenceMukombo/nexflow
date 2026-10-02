@@ -16,10 +16,11 @@ import {
   WarningOutlined, 
   SlidersOutlined, 
   ThunderboltOutlined,
-  SendOutlined
+  SendOutlined,
+  CloseCircleOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
-import { CABLE_CATALOG } from '@omniflow/network-engine';
+import { CABLE_CATALOG, checkNodeNetworkConfig } from '@omniflow/network-engine';
 import { ComponentIcon } from './ComponentIcon';
 
 const { Text, Title } = Typography;
@@ -195,6 +196,8 @@ export const Inspector: React.FC = () => {
 
   // NODE SELECTED
   const isFailed = selectedNode!.simulationState.isFailed;
+  const netStatus = selectedNode ? checkNodeNetworkConfig(selectedNode, graph) : null;
+  const isNetMisconfigured = netStatus ? !netStatus.canConnect : false;
 
   return (
     <div
@@ -218,14 +221,57 @@ export const Inspector: React.FC = () => {
             {selectedNode!.name.split('(')[0]}
           </Title>
         </div>
-        <Tag color={isFailed ? 'error' : 'success'}>
-          {isFailed ? 'OFFLINE' : 'ONLINE'}
+        <Tag color={isFailed ? 'error' : isNetMisconfigured ? 'error' : 'success'}>
+          {isFailed 
+            ? 'OFFLINE' 
+            : isNetMisconfigured 
+            ? (netStatus?.statusText === 'SUBNET_MISMATCH' ? 'SUBNET MISMATCH' : 'DISCONNECTED') 
+            : 'ONLINE'}
         </Tag>
       </div>
 
       <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
         {selectedNode!.description}
       </Text>
+
+      {/* Prominent Network Misconfiguration Warning */}
+      {isNetMisconfigured && netStatus && (
+        <div style={{
+          backgroundColor: '#450a0a',
+          border: '1px solid #dc2626',
+          borderRadius: 6,
+          padding: '10px 12px',
+          marginTop: 10,
+          marginBottom: 4
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fca5a5', fontWeight: 700, fontSize: 12 }}>
+            <CloseCircleOutlined style={{ color: '#ef4444', fontSize: 14 }} />
+            <span>Network Transmission Blocked</span>
+          </div>
+          <div style={{ color: '#fecaca', fontSize: 11, marginTop: 4, lineHeight: '16px' }}>
+            {netStatus.reason}
+          </div>
+          {netStatus.suggestedIp && (
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 6, borderTop: '1px solid #7f1d1d' }}>
+              <span style={{ fontSize: 10.5, color: '#fca5a5' }}>
+                Suggested IP: <code style={{ color: '#38bdf8', backgroundColor: '#0f172a', padding: '1px 4px', borderRadius: 3 }}>{netStatus.suggestedIp}</code>
+              </span>
+              <Button
+                size="small"
+                type="primary"
+                danger
+                onClick={() => {
+                  const key = selectedNode!.properties.lanIp !== undefined ? 'lanIp' : 'ipAddress';
+                  updateComponentProperties(selectedNode!.id, { [key]: netStatus.suggestedIp });
+                  message.success(`Reconfigured ${selectedNode!.name} IP to ${netStatus.suggestedIp}. Connected to network.`);
+                }}
+              >
+                Auto-Fix IP
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Fault Injection Button */}
       <Button
@@ -261,14 +307,18 @@ export const Inspector: React.FC = () => {
             size="small"
             type="primary"
             icon={<SendOutlined />}
-            disabled={!pingTargetId}
+            disabled={!pingTargetId || isNetMisconfigured}
             onClick={() => {
               if (!pingTargetId) return;
+              if (isNetMisconfigured) {
+                message.error(`Transmission blocked: ${selectedNode!.name} has wrong IP settings (${netStatus?.statusText}).`);
+                return;
+              }
               const reached = sendDirectedPing(selectedNode!.id, pingTargetId);
               if (reached) {
                 message.success('Packet dispatched! Routing along active path...');
               } else {
-                message.error('Destination unreachable! No active route or link failed.');
+                message.error('Destination unreachable! Target device offline or subnet mismatch.');
               }
             }}
           >

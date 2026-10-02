@@ -5,6 +5,7 @@ import {
   EngineeringConnection,
   FlowMedium
 } from '@omniflow/shared-types';
+import { checkNodeNetworkConfig } from './validation';
 
 export interface RouteHop {
   nodeId: string;
@@ -31,6 +32,11 @@ export function findShortestPath(
   const targetNode = graph.nodes[targetNodeId];
   if (!startNode || !targetNode) return null;
   if (startNode.simulationState.isFailed || targetNode.simulationState.isFailed) return null;
+
+  // Block route if either endpoint has invalid IP configuration or subnet mismatch
+  const startNet = checkNodeNetworkConfig(startNode, graph);
+  const targetNet = checkNodeNetworkConfig(targetNode, graph);
+  if (!startNet.canConnect || !targetNet.canConnect) return null;
 
   // Adjacency list: node -> array of { neighborId, connectionId }
   const adj = new Map<string, Array<{ neighborId: string; connectionId: string; isFailed: boolean }>>();
@@ -64,8 +70,12 @@ export function findShortestPath(
       const neighborNode = graph.nodes[neighborId];
       if (!neighborNode) continue;
 
-      // Cannot traverse if node or connection is failed
+      // Cannot traverse if node or connection is failed or IP misconfigured
       if (neighborNode.simulationState.isFailed || isFailed) {
+        continue;
+      }
+      const neighborNet = checkNodeNetworkConfig(neighborNode, graph);
+      if (!neighborNet.canConnect) {
         continue;
       }
 
@@ -125,6 +135,13 @@ export function spawnContinuousFlowPackets(
     const tgtNode = graph.nodes[conn.targetComponentId];
 
     if (isFailed || !srcNode || !tgtNode || srcNode.simulationState.isFailed || tgtNode.simulationState.isFailed) {
+      continue;
+    }
+
+    // Devices with wrong network settings (subnet mismatch, invalid IP) cannot connect or transmit
+    const srcNet = checkNodeNetworkConfig(srcNode, graph);
+    const tgtNet = checkNodeNetworkConfig(tgtNode, graph);
+    if (!srcNet.canConnect || !tgtNet.canConnect) {
       continue;
     }
 
@@ -256,9 +273,19 @@ export function stepNetworkSimulation(
   for (const packet of currentState.packets) {
     const conn = graph.connections[packet.currentEdgeId];
     const targetNode = graph.nodes[packet.targetNodeId];
+    const srcNode = graph.nodes[packet.sourceNodeId];
 
-    // If link or target node has failed during transit
-    if (!conn || conn.simulationState.isFailed || (targetNode && targetNode.simulationState.isFailed)) {
+    const srcNet = srcNode ? checkNodeNetworkConfig(srcNode, graph) : null;
+    const tgtNet = targetNode ? checkNodeNetworkConfig(targetNode, graph) : null;
+
+    // If link, target node, or source node has failed or has invalid IP settings
+    if (
+      !conn || 
+      conn.simulationState.isFailed || 
+      (targetNode && targetNode.simulationState.isFailed) ||
+      (srcNet && !srcNet.canConnect) ||
+      (tgtNet && !tgtNet.canConnect)
+    ) {
       packet.status = 'FAILED';
       droppedCount++;
       continue;
