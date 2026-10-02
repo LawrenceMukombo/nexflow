@@ -26,22 +26,31 @@ import {
   ClusterOutlined,
   TableOutlined,
   DownOutlined,
-  BuildOutlined
+  BuildOutlined,
+  UndoOutlined,
+  RedoOutlined,
+  FilePdfOutlined,
+  DollarOutlined,
+  HistoryOutlined,
+  ExportOutlined,
+  BookOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
 
-interface CanvasManipulatorMenuProps {
-  buttonType?: 'default' | 'primary' | 'text' | 'dashed';
-  size?: 'small' | 'middle' | 'large';
-  showBadge?: boolean;
-}
+const domainLabels: Record<EngineeringDomain, string> = {
+  NETWORK: '🌐 Network',
+  ELECTRICAL: '⚡ Electrical Power',
+  PLUMBING: '💧 Plumbing & HVAC',
+  SOLAR: '☀️ Solar Energy',
+  CCTV: '🛡️ CCTV & Security',
+  MULTI_DOMAIN: '🏢 All Domains'
+};
 
-export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
-  buttonType = 'default',
-  size = 'middle',
-  showBadge = true
-}) => {
+/**
+ * Professional Enterprise Menu Bar (Edit, View, Arrange, Tools, Blueprints)
+ */
+export const EnterpriseMenuBar: React.FC = () => {
   const {
     graph,
     activeDomain,
@@ -63,142 +72,86 @@ export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
     deleteSelectedComponents,
     autoLayout,
     clearCanvas,
-    injectFaultOrSurge
+    injectFaultOrSurge,
+    undo,
+    redo,
+    historyIndex,
+    history,
+    loadSystemDesign,
+    toggleWizardModal,
+    toggleLibraryModal,
+    toggleSaveAssemblyModal,
+    toggleBOQModal,
+    toggleCableScheduleModal,
+    openDesignReportModal,
+    openVersionDiffModal,
+    openExportCenterModal,
+    toggleValidationDrawer,
+    validationIssues
   } = useGraphStore();
 
   const allNodes = Object.values(graph.nodes);
   const domainNodes = allNodes.filter(n => isComponentInDomain(n, activeDomain));
-  const visibleNodes = domainFilterMode === 'ALL_DOMAINS' 
-    ? allNodes 
-    : domainNodes;
+  const visibleNodes = domainFilterMode === 'ALL_DOMAINS' ? allNodes : domainNodes;
 
-  const domainLabels: Record<EngineeringDomain, string> = {
-    NETWORK: '🌐 Network',
-    ELECTRICAL: '⚡ Electrical Power',
-    PLUMBING: '💧 Plumbing & Cooling',
-    SOLAR: '☀️ Solar Energy',
-    CCTV: '🛡️ CCTV & Security',
-    MULTI_DOMAIN: '🏢 All Domains'
-  };
-
-  const menuItems: MenuProps['items'] = [
-    // --- 1. DOMAIN ISOLATION & VISIBILITY ---
+  // ─────────────────────────────────────────────────────────────
+  // 1. EDIT MENU
+  // ─────────────────────────────────────────────────────────────
+  const editMenuItems: MenuProps['items'] = [
     {
-      key: 'grp-domain-isolation',
+      key: 'edit-undo',
+      icon: <UndoOutlined style={{ color: historyIndex > 0 ? '#38bdf8' : '#475569' }} />,
       label: (
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', letterSpacing: '0.05em' }}>
-          DOMAIN WORKSPACE & ISOLATION
-        </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Undo</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Ctrl+Z</span>
+        </div>
       ),
-      type: 'group',
-      children: [
-        {
-          key: 'isolate-domain',
-          icon: domainFilterMode === 'ACTIVE_ONLY' 
-            ? <EyeInvisibleOutlined style={{ color: '#38bdf8' }} /> 
-            : <EyeOutlined style={{ color: '#94a3b8' }} />,
-          label: (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <span>Isolate {domainLabels[activeDomain]} Only</span>
-              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: domainFilterMode === 'ACTIVE_ONLY' ? '#0369a1' : '#334155', color: '#fff' }}>
-                {domainFilterMode === 'ACTIVE_ONLY' ? 'Active' : 'Show All'}
-              </span>
-            </div>
-          ),
-          onClick: () => {
-            toggleDomainFilterMode();
-            message.info(domainFilterMode === 'ACTIVE_ONLY' ? 'Showing all engineering domains on canvas' : `Isolated ${domainLabels[activeDomain]} canvas`);
-          }
-        },
-        {
-          key: 'show-all-domains',
-          icon: <ClusterOutlined style={{ color: '#10b981' }} />,
-          label: `Show All Domains (${allNodes.length} Total Components)`,
-          onClick: () => {
-            setDomainFilterMode('ALL_DOMAINS');
-            message.success('Overlay mode enabled: all domains visible simultaneously');
-          }
-        },
-        {
-          key: 'switch-domain-sub',
-          icon: <BranchesOutlined style={{ color: '#f59e0b' }} />,
-          label: 'Switch Active Domain Layer',
-          children: [
-            {
-              key: 'dom-net',
-              label: '🌐 Network Domain',
-              onClick: () => { setActiveDomain('NETWORK'); message.info('Switched to Network Domain canvas'); }
-            },
-            {
-              key: 'dom-elec',
-              label: '⚡ Electrical Power Domain',
-              onClick: () => { setActiveDomain('ELECTRICAL'); message.info('Switched to Electrical Power Domain canvas'); }
-            },
-            {
-              key: 'dom-plumb',
-              label: '💧 Plumbing & Cooling Domain',
-              onClick: () => { setActiveDomain('PLUMBING'); message.info('Switched to Plumbing & Cooling Domain canvas'); }
-            },
-            {
-              key: 'dom-cctv',
-              label: '🛡️ CCTV & Surveillance Domain',
-              onClick: () => { setActiveDomain('CCTV'); message.info('Switched to CCTV & Security Domain canvas'); }
-            },
-            {
-              key: 'dom-all',
-              label: '🏢 All Domains (Multi-Facility)',
-              onClick: () => { setActiveDomain('MULTI_DOMAIN'); setDomainFilterMode('ALL_DOMAINS'); message.info('Switched to All Domains'); }
-            }
-          ]
-        },
-        {
-          key: 'zoom-fit',
-          icon: <AimOutlined style={{ color: '#38bdf8' }} />,
-          label: 'Zoom & Center to Fit Visible Components',
-          onClick: () => {
-            zoomToFitVisible();
-            message.success('Viewport centered on active components');
-          }
-        }
-      ]
+      disabled: historyIndex <= 0,
+      onClick: undo
     },
-
-    { type: 'divider' },
-
-    // --- 2. SELECTION & FILTERING ---
     {
-      key: 'grp-selection',
+      key: 'edit-redo',
+      icon: <RedoOutlined style={{ color: historyIndex < history.length - 1 ? '#38bdf8' : '#475569' }} />,
       label: (
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', letterSpacing: '0.05em' }}>
-          SELECT & HIGHLIGHT
-        </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Redo</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Ctrl+Y</span>
+        </div>
       ),
-      type: 'group',
+      disabled: historyIndex >= history.length - 1,
+      onClick: redo
+    },
+    { type: 'divider' },
+    {
+      key: 'edit-select-all',
+      icon: <CheckSquareOutlined style={{ color: '#38bdf8' }} />,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Select All ({visibleNodes.length})</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Ctrl+A</span>
+        </div>
+      ),
+      onClick: selectAllNodes
+    },
+    {
+      key: 'edit-select-sub',
+      icon: <BorderOutlined style={{ color: '#a855f7' }} />,
+      label: 'Select by Category',
       children: [
         {
-          key: 'sel-all-vis',
-          icon: <CheckSquareOutlined style={{ color: '#38bdf8' }} />,
-          label: (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <span>Select All Visible ({visibleNodes.length})</span>
-              <span style={{ color: '#64748b', fontSize: 11 }}>Ctrl+A</span>
-            </div>
-          ),
-          onClick: selectAllNodes
-        },
-        {
-          key: 'sel-domain',
+          key: 'sel-current-domain',
           icon: <ThunderboltOutlined style={{ color: '#facc15' }} />,
-          label: `Select All ${domainLabels[activeDomain]} (${domainNodes.length})`,
+          label: `Select Current Domain (${domainNodes.length})`,
           onClick: () => {
             selectNodesByCondition('DOMAIN');
             message.info(`Selected all ${domainNodes.length} components in active domain`);
           }
         },
         {
-          key: 'sel-offline',
+          key: 'sel-faulted',
           icon: <WarningOutlined style={{ color: '#ef4444' }} />,
-          label: 'Select Offline & Faulty Devices',
+          label: 'Select Faulted / Offline Devices',
           onClick: () => {
             selectNodesByCondition('OFFLINE');
             message.info('Selected offline and degraded hardware nodes');
@@ -213,7 +166,7 @@ export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
         {
           key: 'sel-switches',
           icon: <TableOutlined style={{ color: '#818cf8' }} />,
-          label: 'Select Switches & Distribution PDUs',
+          label: 'Select Switches & Distribution',
           onClick: () => selectNodesByCondition('SWITCHES')
         },
         {
@@ -221,142 +174,310 @@ export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
           icon: <BorderOutlined style={{ color: '#94a3b8' }} />,
           label: 'Invert Selection',
           onClick: invertSelection
-        },
-        {
-          key: 'sel-clear',
-          icon: <DisconnectOutlined style={{ color: '#64748b' }} />,
-          label: (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <span>Deselect All</span>
-              <span style={{ color: '#64748b', fontSize: 11 }}>Esc</span>
-            </div>
-          ),
-          onClick: clearSelection
         }
       ]
     },
-
-    { type: 'divider' },
-
-    // --- 3. POSITIONING, ALIGNMENT & CAD LAYOUT ---
     {
-      key: 'grp-alignment',
+      key: 'edit-deselect-all',
+      icon: <DisconnectOutlined style={{ color: '#64748b' }} />,
       label: (
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', letterSpacing: '0.05em' }}>
-          LAYOUT, ALIGN & ARRANGE
-        </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Deselect All</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Esc</span>
+        </div>
       ),
-      type: 'group',
+      onClick: clearSelection
+    },
+    { type: 'divider' },
+    {
+      key: 'edit-duplicate',
+      icon: <CopyOutlined style={{ color: '#10b981' }} />,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Duplicate Selected</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Ctrl+D</span>
+        </div>
+      ),
+      disabled: selectedNodeIds.length === 0,
+      onClick: () => {
+        duplicateSelectedComponents();
+        message.success(`Duplicated ${selectedNodeIds.length} components`);
+      }
+    },
+    {
+      key: 'edit-delete',
+      icon: <DeleteOutlined style={{ color: '#ef4444' }} />,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Delete Selected</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Del</span>
+        </div>
+      ),
+      disabled: selectedNodeIds.length === 0,
+      onClick: () => {
+        deleteSelectedComponents();
+        message.info('Deleted selected components');
+      }
+    },
+    { type: 'divider' },
+    {
+      key: 'edit-clear-domain',
+      icon: <ClearOutlined style={{ color: '#f59e0b' }} />,
+      label: `Clear ${domainLabels[activeDomain]} Layer`,
+      onClick: () => {
+        clearDomainComponents(activeDomain);
+        message.warning(`Cleared all components in ${domainLabels[activeDomain]}`);
+      }
+    },
+    {
+      key: 'edit-clear-canvas',
+      icon: <ClearOutlined style={{ color: '#ef4444' }} />,
+      label: 'Clear Entire Canvas',
+      onClick: () => {
+        clearCanvas();
+        message.info('Cleared entire canvas');
+      }
+    }
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 2. VIEW MENU
+  // ─────────────────────────────────────────────────────────────
+  const viewMenuItems: MenuProps['items'] = [
+    {
+      key: 'view-zoom-fit',
+      icon: <AimOutlined style={{ color: '#38bdf8' }} />,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Zoom to Fit</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Shift+1</span>
+        </div>
+      ),
+      onClick: () => {
+        zoomToFitVisible();
+        message.success('Viewport centered on active components');
+      }
+    },
+    { type: 'divider' },
+    {
+      key: 'view-isolate-domain',
+      icon: domainFilterMode === 'ACTIVE_ONLY' 
+        ? <EyeInvisibleOutlined style={{ color: '#38bdf8' }} /> 
+        : <EyeOutlined style={{ color: '#94a3b8' }} />,
+      label: (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <span>Isolate Active Domain Only</span>
+          <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: domainFilterMode === 'ACTIVE_ONLY' ? '#0369a1' : '#334155', color: '#fff' }}>
+            {domainFilterMode === 'ACTIVE_ONLY' ? 'Active' : 'Off'}
+          </span>
+        </div>
+      ),
+      onClick: () => {
+        toggleDomainFilterMode();
+        message.info(domainFilterMode === 'ACTIVE_ONLY' ? 'Showing all engineering domains on canvas' : `Isolated ${domainLabels[activeDomain]} canvas`);
+      }
+    },
+    {
+      key: 'view-all-domains',
+      icon: <ClusterOutlined style={{ color: '#10b981' }} />,
+      label: `Show All Domain Layers (${allNodes.length} Components)`,
+      onClick: () => {
+        setDomainFilterMode('ALL_DOMAINS');
+        message.success('Overlay mode enabled: all domains visible simultaneously');
+      }
+    },
+    {
+      key: 'view-domain-layers',
+      icon: <BranchesOutlined style={{ color: '#f59e0b' }} />,
+      label: 'Switch Active Domain Layer',
       children: [
         {
-          key: 'align-h-center',
-          icon: <ColumnHeightOutlined style={{ color: '#38bdf8' }} />,
-          label: 'Align Center Horizontally (Match Y)',
-          onClick: () => {
-            alignSelectedNodes('horizontal');
-            message.success('Aligned components horizontally');
-          }
+          key: 'vdom-net',
+          label: '🌐 Network Domain',
+          onClick: () => { setActiveDomain('NETWORK'); setDomainFilterMode('ACTIVE_ONLY'); message.info('Switched to Network Domain'); }
         },
         {
-          key: 'align-v-center',
-          icon: <ColumnWidthOutlined style={{ color: '#38bdf8' }} />,
-          label: 'Align Center Vertically (Match X)',
-          onClick: () => {
-            alignSelectedNodes('vertical');
-            message.success('Aligned components vertically');
-          }
+          key: 'vdom-elec',
+          label: '⚡ Electrical Power Domain',
+          onClick: () => { setActiveDomain('ELECTRICAL'); setDomainFilterMode('ACTIVE_ONLY'); message.info('Switched to Electrical Power Domain'); }
         },
+        {
+          key: 'vdom-plumb',
+          label: '💧 Plumbing & HVAC Domain',
+          onClick: () => { setActiveDomain('PLUMBING'); setDomainFilterMode('ACTIVE_ONLY'); message.info('Switched to Plumbing & Cooling Domain'); }
+        },
+        {
+          key: 'vdom-cctv',
+          label: '🛡️ CCTV & Security Domain',
+          onClick: () => { setActiveDomain('CCTV'); setDomainFilterMode('ACTIVE_ONLY'); message.info('Switched to CCTV & Security Domain'); }
+        },
+        {
+          key: 'vdom-solar',
+          label: '☀️ Solar & Renewable Domain',
+          onClick: () => { setActiveDomain('SOLAR'); setDomainFilterMode('ACTIVE_ONLY'); message.info('Switched to Solar Power Domain'); }
+        },
+        {
+          key: 'vdom-all',
+          label: '🏢 All Domains (Multi-Facility)',
+          onClick: () => { setActiveDomain('MULTI_DOMAIN'); setDomainFilterMode('ALL_DOMAINS'); message.info('Switched to All Domains'); }
+        }
+      ]
+    },
+    { type: 'divider' },
+    {
+      key: 'view-diagnostics-drawer',
+      icon: <WarningOutlined style={{ color: validationIssues.length > 0 ? '#ef4444' : '#10b981' }} />,
+      label: `Engineering Diagnostics (${validationIssues.length} issues)`,
+      onClick: () => toggleValidationDrawer(true)
+    }
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 3. ARRANGE MENU
+  // ─────────────────────────────────────────────────────────────
+  const arrangeMenuItems: MenuProps['items'] = [
+    {
+      key: 'arr-align-sub',
+      icon: <AlignLeftOutlined style={{ color: '#38bdf8' }} />,
+      label: 'Align Components',
+      disabled: selectedNodeIds.length < 2,
+      children: [
         {
           key: 'align-left',
-          icon: <AlignLeftOutlined style={{ color: '#94a3b8' }} />,
-          label: 'Align Leftmost Edge',
-          onClick: () => {
-            alignSelectedNodes('alignLeft');
-            message.success('Aligned to leftmost component');
-          }
+          icon: <AlignLeftOutlined />,
+          label: 'Align Left',
+          onClick: () => { alignSelectedNodes('alignLeft'); message.success('Aligned to left'); }
+        },
+        {
+          key: 'align-h-center',
+          icon: <ColumnHeightOutlined />,
+          label: 'Align Center Horizontally',
+          onClick: () => { alignSelectedNodes('horizontal'); message.success('Aligned horizontal center'); }
         },
         {
           key: 'align-right',
-          icon: <AlignRightOutlined style={{ color: '#94a3b8' }} />,
-          label: 'Align Rightmost Edge',
+          icon: <AlignRightOutlined />,
+          label: 'Align Right',
+          onClick: () => { alignSelectedNodes('alignRight'); message.success('Aligned to right'); }
+        },
+        {
+          key: 'align-v-center',
+          icon: <ColumnWidthOutlined />,
+          label: 'Align Center Vertically',
+          onClick: () => { alignSelectedNodes('vertical'); message.success('Aligned vertical center'); }
+        }
+      ]
+    },
+    {
+      key: 'arr-dist-sub',
+      icon: <ColumnWidthOutlined style={{ color: '#10b981' }} />,
+      label: 'Distribute Evenly',
+      disabled: selectedNodeIds.length < 3,
+      children: [
+        {
+          key: 'dist-h',
+          icon: <ColumnWidthOutlined />,
+          label: 'Distribute Horizontally',
+          onClick: () => { alignSelectedNodes('distributeH'); message.success('Distributed horizontally'); }
+        },
+        {
+          key: 'dist-v',
+          icon: <ColumnHeightOutlined />,
+          label: 'Distribute Vertically',
+          onClick: () => { alignSelectedNodes('distributeV'); message.success('Distributed vertically'); }
+        }
+      ]
+    },
+    { type: 'divider' },
+    {
+      key: 'arr-auto-tiers',
+      icon: <ApartmentOutlined style={{ color: '#38bdf8' }} />,
+      label: 'Auto-Layout: Hierarchical Architecture',
+      onClick: () => {
+        autoLayout();
+        message.success('Auto-organized into hierarchical architecture tiers');
+      }
+    },
+    {
+      key: 'arr-pipeline',
+      icon: <BranchesOutlined style={{ color: '#06b6d4' }} />,
+      label: 'Auto-Arrange: Flow Pipeline (Left-to-Right)',
+      disabled: selectedNodeIds.length < 2,
+      onClick: () => {
+        alignSelectedNodes('pipeline');
+        message.success('Arranged in left-to-right flow pipeline');
+      }
+    },
+    {
+      key: 'arr-grid',
+      icon: <AppstoreOutlined style={{ color: '#f59e0b' }} />,
+      label: 'Auto-Arrange: Matrix Grid',
+      disabled: selectedNodeIds.length < 2,
+      onClick: () => {
+        alignSelectedNodes('grid');
+        message.success('Arranged in matrix grid');
+      }
+    }
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 4. TOOLS / OPERATIONS MENU
+  // ─────────────────────────────────────────────────────────────
+  const toolsMenuItems: MenuProps['items'] = [
+    {
+      key: 'tool-auto-connect-sub',
+      icon: <ClusterOutlined style={{ color: '#38bdf8' }} />,
+      label: 'Auto-Connect Selected',
+      disabled: selectedNodeIds.length < 2,
+      children: [
+        {
+          key: 'wire-star',
+          icon: <ClusterOutlined style={{ color: '#38bdf8' }} />,
+          label: 'Star Topology (Hub to Spokes)',
           onClick: () => {
-            alignSelectedNodes('alignRight');
-            message.success('Aligned to rightmost component');
+            connectSelectedNodes('star');
+            message.success('Connected selected nodes in Star topology');
           }
         },
         {
-          key: 'distribute-h',
-          icon: <ColumnWidthOutlined style={{ color: '#10b981' }} />,
-          label: 'Distribute Evenly (Horizontal Spacing)',
+          key: 'wire-daisy',
+          icon: <BranchesOutlined style={{ color: '#10b981' }} />,
+          label: 'Daisy-Chain (Linear Sequence)',
           onClick: () => {
-            alignSelectedNodes('distributeH');
-            message.success('Distributed evenly along horizontal axis');
+            connectSelectedNodes('daisy');
+            message.success('Connected selected nodes in linear Daisy-Chain');
           }
         },
         {
-          key: 'distribute-v',
-          icon: <ColumnHeightOutlined style={{ color: '#10b981' }} />,
-          label: 'Distribute Evenly (Vertical Spacing)',
+          key: 'wire-mesh',
+          icon: <BuildOutlined style={{ color: '#ec4899' }} />,
+          label: 'Redundant Full Mesh',
           onClick: () => {
-            alignSelectedNodes('distributeV');
-            message.success('Distributed evenly along vertical axis');
-          }
-        },
-        {
-          key: 'arrange-pipeline',
-          icon: <BranchesOutlined style={{ color: '#06b6d4' }} />,
-          label: 'Arrange as Flow Pipeline (Left-to-Right)',
-          onClick: () => {
-            alignSelectedNodes('pipeline');
-            message.success('Arranged in left-to-right flow pipeline');
-          }
-        },
-        {
-          key: 'arrange-grid',
-          icon: <AppstoreOutlined style={{ color: '#f59e0b' }} />,
-          label: 'Arrange in Matrix Grid',
-          onClick: () => {
-            alignSelectedNodes('grid');
-            message.success('Arranged in matrix grid');
-          }
-        },
-        {
-          key: 'auto-tiers',
-          icon: <ApartmentOutlined style={{ color: '#38bdf8' }} />,
-          label: 'Auto-Layout Hierarchical Engineering Tiers',
-          onClick: () => {
-            autoLayout();
-            message.success('Auto-organized into hierarchical engineering tiers');
+            connectSelectedNodes('mesh');
+            message.success('Connected selected nodes in Redundant Mesh');
           }
         }
       ]
     },
-
-    { type: 'divider' },
-
-    // --- 4. SIMULATION & HARDWARE STATES ---
     {
-      key: 'grp-simulation-states',
-      label: (
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', letterSpacing: '0.05em' }}>
-          SIMULATION & HARDWARE STATE
-        </span>
-      ),
-      type: 'group',
+      key: 'tool-power-sub',
+      icon: <ThunderboltOutlined style={{ color: '#facc15' }} />,
+      label: 'Component Power & Diagnostics',
       children: [
         {
           key: 'pwr-all-online',
           icon: <CheckCircleOutlined style={{ color: '#10b981' }} />,
-          label: 'Bulk Power ON (Set All to Online 🟢)',
+          label: 'Power State: Bring All Online',
           onClick: () => {
             bulkSetComponentStatus('ONLINE');
-            message.success('Powered on components to nominal operational status');
+            message.success('All hardware components powered on to nominal status');
           }
         },
         {
           key: 'pwr-sel-offline',
           icon: <CloseCircleOutlined style={{ color: '#ef4444' }} />,
-          label: 'Bulk Power OFF (Shutdown Selected 🔴)',
+          label: 'Power State: Power Off Selected',
+          disabled: selectedNodeIds.length === 0,
           onClick: () => {
             bulkSetComponentStatus('OFFLINE');
             message.warning('Powered down selected components');
@@ -365,16 +486,17 @@ export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
         {
           key: 'inj-fault',
           icon: <WarningOutlined style={{ color: '#f59e0b' }} />,
-          label: 'Inject Hardware Failure (Simulate Fault ❌)',
+          label: 'Diagnostics: Simulate Component Fault',
+          disabled: selectedNodeIds.length === 0,
           onClick: () => {
             bulkSetComponentStatus('FAILED');
-            message.error('Simulated hardware failure on components');
+            message.error('Simulated hardware failure on selected components');
           }
         },
         {
           key: 'reset-nominal',
           icon: <SyncOutlined style={{ color: '#06b6d4' }} />,
-          label: 'Restore Healthy Nominal State',
+          label: 'Diagnostics: Restore Nominal Healthy State',
           onClick: () => {
             bulkSetComponentStatus('ONLINE');
             message.success('All hardware reset to nominal healthy telemetry');
@@ -383,7 +505,7 @@ export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
         {
           key: 'trig-burst',
           icon: <ThunderboltOutlined style={{ color: '#facc15' }} />,
-          label: 'Trigger Packet Burst / Signal Surge',
+          label: 'Simulation: Inject Traffic / Power Surge',
           onClick: () => {
             injectFaultOrSurge('PACKET_BURST');
             message.success('Dispatched high-density simulation packets');
@@ -391,134 +513,192 @@ export const CanvasManipulatorMenu: React.FC<CanvasManipulatorMenuProps> = ({
         }
       ]
     },
-
     { type: 'divider' },
-
-    // --- 5. BATCH WIRING & CLEANUP ---
     {
-      key: 'grp-wiring-ops',
-      label: (
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8', letterSpacing: '0.05em' }}>
-          BATCH WIRING & CLEANUP
-        </span>
-      ),
-      type: 'group',
-      children: [
-        {
-          key: 'wire-star',
-          icon: <ClusterOutlined style={{ color: '#38bdf8' }} />,
-          label: 'Auto-Wire Selected (Star Topology)',
-          disabled: selectedNodeIds.length < 2,
-          onClick: () => {
-            connectSelectedNodes('star');
-            message.success('Wired selected nodes in Star topology');
-          }
-        },
-        {
-          key: 'wire-daisy',
-          icon: <BranchesOutlined style={{ color: '#10b981' }} />,
-          label: 'Auto-Wire Selected (Daisy-Chain)',
-          disabled: selectedNodeIds.length < 2,
-          onClick: () => {
-            connectSelectedNodes('daisy');
-            message.success('Wired selected nodes in linear Daisy-Chain');
-          }
-        },
-        {
-          key: 'wire-mesh',
-          icon: <BuildOutlined style={{ color: '#ec4899' }} />,
-          label: 'Auto-Wire Selected (Redundant Mesh)',
-          disabled: selectedNodeIds.length < 2,
-          onClick: () => {
-            connectSelectedNodes('mesh');
-            message.success('Wired selected nodes in Redundant Mesh');
-          }
-        },
-        {
-          key: 'dup-sel',
-          icon: <CopyOutlined style={{ color: '#38bdf8' }} />,
-          label: (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <span>Duplicate Selected</span>
-              <span style={{ color: '#64748b', fontSize: 11 }}>Ctrl+D</span>
-            </div>
-          ),
-          disabled: selectedNodeIds.length === 0,
-          onClick: () => {
-            duplicateSelectedComponents();
-            message.success(`Duplicated ${selectedNodeIds.length} components`);
-          }
-        },
-        {
-          key: 'del-sel',
-          icon: <DeleteOutlined style={{ color: '#ef4444' }} />,
-          label: (
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <span>Delete Selected</span>
-              <span style={{ color: '#64748b', fontSize: 11 }}>Del</span>
-            </div>
-          ),
-          disabled: selectedNodeIds.length === 0,
-          onClick: () => {
-            deleteSelectedComponents();
-            message.info('Deleted selected components');
-          }
-        },
-        {
-          key: 'clear-domain-only',
-          icon: <ClearOutlined style={{ color: '#f59e0b' }} />,
-          label: `Clear ${domainLabels[activeDomain]} Components Only (Keep Other Domains)`,
-          onClick: () => {
-            clearDomainComponents(activeDomain);
-            message.warning(`Cleared all components in ${domainLabels[activeDomain]}`);
-          }
-        },
-        {
-          key: 'clear-all',
-          icon: <ClearOutlined style={{ color: '#ef4444' }} />,
-          label: 'Clear Entire Canvas (Reset Project)',
-          onClick: () => {
-            clearCanvas();
-            message.info('Cleared entire canvas');
-          }
-        }
-      ]
+      key: 'tool-wizard',
+      icon: <BuildOutlined style={{ color: '#0284c7' }} />,
+      label: 'System Topology Wizard...',
+      onClick: () => toggleWizardModal(true)
+    },
+    {
+      key: 'tool-libraries',
+      icon: <BookOutlined style={{ color: '#38bdf8' }} />,
+      label: 'Component & Vendor Libraries...',
+      onClick: () => toggleLibraryModal(true)
+    },
+    {
+      key: 'tool-save-assembly',
+      icon: <CopyOutlined style={{ color: '#10b981' }} />,
+      label: 'Save Selection as Reusable Template...',
+      disabled: selectedNodeIds.length === 0,
+      onClick: () => toggleSaveAssemblyModal(true)
+    },
+    { type: 'divider' },
+    {
+      key: 'tool-boq',
+      icon: <DollarOutlined style={{ color: '#10b981' }} />,
+      label: 'Bill of Materials (BOM / BOQ)...',
+      onClick: () => toggleBOQModal(true)
+    },
+    {
+      key: 'tool-cables',
+      icon: <TableOutlined style={{ color: '#38bdf8' }} />,
+      label: 'Cable Schedule & Run List...',
+      onClick: () => toggleCableScheduleModal(true)
+    },
+    {
+      key: 'tool-report',
+      icon: <FilePdfOutlined style={{ color: '#0284c7' }} />,
+      label: 'Engineering Design Specification (PDF)...',
+      onClick: openDesignReportModal
+    },
+    {
+      key: 'tool-diff',
+      icon: <HistoryOutlined style={{ color: '#f59e0b' }} />,
+      label: 'Revision History & Variance Diff...',
+      onClick: openVersionDiffModal
+    },
+    {
+      key: 'tool-export',
+      icon: <ExportOutlined style={{ color: '#10b981' }} />,
+      label: 'Project Export Center...',
+      onClick: openExportCenterModal
     }
   ];
 
+  // ─────────────────────────────────────────────────────────────
+  // 5. BLUEPRINTS / TEMPLATES MENU
+  // ─────────────────────────────────────────────────────────────
+  const blueprintsMenuItems: MenuProps['items'] = [
+    {
+      key: 'bp-multi',
+      icon: <BuildOutlined style={{ color: '#06b6d4' }} />,
+      label: (
+        <div>
+          <div style={{ fontWeight: 600, color: '#f8fafc' }}>Integrated Smart Facility</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>Network Fiber + 400V Power + 7°C Chilled Water</div>
+        </div>
+      ),
+      onClick: () => {
+        loadSystemDesign('MULTI_DOMAIN');
+        message.success('Loaded Multi-Domain Smart Facility Blueprint');
+      }
+    },
+    {
+      key: 'bp-net',
+      icon: <BranchesOutlined style={{ color: '#38bdf8' }} />,
+      label: (
+        <div>
+          <div style={{ fontWeight: 600, color: '#f8fafc' }}>Corporate Enterprise Network</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>Edge Router, UTM Firewall, Core & PoE Switches, Workstations</div>
+        </div>
+      ),
+      onClick: () => {
+        loadSystemDesign('NETWORK');
+        message.success('Loaded Corporate Enterprise Network Blueprint');
+      }
+    },
+    {
+      key: 'bp-elec',
+      icon: <ThunderboltOutlined style={{ color: '#facc15' }} />,
+      label: (
+        <div>
+          <div style={{ fontWeight: 600, color: '#f8fafc' }}>Critical Electrical Distribution</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>500kVA Substation, Diesel Generator, ATS & 40kVA UPS</div>
+        </div>
+      ),
+      onClick: () => {
+        loadSystemDesign('ELECTRICAL');
+        message.success('Loaded Critical Electrical Power System Blueprint');
+      }
+    },
+    {
+      key: 'bp-plumb',
+      icon: <TableOutlined style={{ color: '#0284c7' }} />,
+      label: (
+        <div>
+          <div style={{ fontWeight: 600, color: '#f8fafc' }}>Data Center Chilled Water System</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>100-Ton Chiller, VFD Pumps, CRAH Coolers & Cooling Tower</div>
+        </div>
+      ),
+      onClick: () => {
+        loadSystemDesign('PLUMBING');
+        message.success('Loaded Chilled Water Hydronic Cooling Blueprint');
+      }
+    },
+    {
+      key: 'bp-cctv',
+      icon: <BuildOutlined style={{ color: '#d946ef' }} />,
+      label: (
+        <div>
+          <div style={{ fontWeight: 600, color: '#f8fafc' }}>CCTV & Perimeter Surveillance</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>4K PTZ Cameras, PoE Switch & 32-Channel NVR</div>
+        </div>
+      ),
+      onClick: () => {
+        loadSystemDesign('CCTV');
+        message.success('Loaded CCTV Video Surveillance Blueprint');
+      }
+    }
+  ];
+
+  const menuItemBtnStyle: React.CSSProperties = {
+    color: '#cbd5e1',
+    fontWeight: 500,
+    fontSize: 12.5,
+    padding: '4px 8px',
+    height: 28,
+    borderRadius: 4
+  };
+
   return (
-    <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomLeft">
-      <Button
-        type={buttonType}
-        size={size}
-        icon={<AppstoreOutlined style={{ color: '#38bdf8' }} />}
-        style={{
-          backgroundColor: '#1e293b',
-          borderColor: '#38bdf8',
-          color: '#f8fafc',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6
-        }}
-      >
-        <span>Manipulate Canvas</span>
-        {showBadge && (
-          <span
-            style={{
-              fontSize: 10,
-              padding: '1px 6px',
-              borderRadius: 10,
-              backgroundColor: '#0284c7',
-              color: '#fff',
-              lineHeight: 1.2
-            }}
-          >
-            {visibleNodes.length}
-          </span>
-        )}
-        <DownOutlined style={{ fontSize: 10, color: '#94a3b8' }} />
-      </Button>
-    </Dropdown>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* Edit Menu */}
+      <Dropdown menu={{ items: editMenuItems }} trigger={['click']} placement="bottomLeft">
+        <Button type="text" size="small" style={menuItemBtnStyle}>
+          Edit <DownOutlined style={{ fontSize: 9, color: '#64748b' }} />
+        </Button>
+      </Dropdown>
+
+      {/* View Menu */}
+      <Dropdown menu={{ items: viewMenuItems }} trigger={['click']} placement="bottomLeft">
+        <Button type="text" size="small" style={menuItemBtnStyle}>
+          View <DownOutlined style={{ fontSize: 9, color: '#64748b' }} />
+        </Button>
+      </Dropdown>
+
+      {/* Arrange Menu */}
+      <Dropdown menu={{ items: arrangeMenuItems }} trigger={['click']} placement="bottomLeft">
+        <Button type="text" size="small" style={menuItemBtnStyle}>
+          Arrange <DownOutlined style={{ fontSize: 9, color: '#64748b' }} />
+        </Button>
+      </Dropdown>
+
+      {/* Tools Menu */}
+      <Dropdown menu={{ items: toolsMenuItems }} trigger={['click']} placement="bottomLeft">
+        <Button type="text" size="small" style={menuItemBtnStyle}>
+          Tools <DownOutlined style={{ fontSize: 9, color: '#64748b' }} />
+        </Button>
+      </Dropdown>
+
+      {/* Blueprints Menu */}
+      <Dropdown menu={{ items: blueprintsMenuItems }} trigger={['click']} placement="bottomLeft">
+        <Button type="text" size="small" style={{ ...menuItemBtnStyle, color: '#38bdf8' }}>
+          Blueprints <DownOutlined style={{ fontSize: 9, color: '#38bdf8' }} />
+        </Button>
+      </Dropdown>
+    </div>
   );
+};
+
+/**
+ * Backward compatible CanvasManipulatorMenu export:
+ * Rendered as standard 'Canvas Actions ▾' dropdown with clean hierarchical sub-menus.
+ */
+export const CanvasManipulatorMenu: React.FC<{
+  buttonType?: 'default' | 'primary' | 'text' | 'dashed';
+  size?: 'small' | 'middle' | 'large';
+  showBadge?: boolean;
+}> = () => {
+  return <EnterpriseMenuBar />;
 };

@@ -7,16 +7,10 @@ import {
   ExclamationCircleOutlined, 
   DollarOutlined, 
   TableOutlined, 
-  UndoOutlined, 
-  RedoOutlined, 
-  ClearOutlined, 
   ThunderboltFilled,
-  BranchesOutlined,
   BuildOutlined,
-  PartitionOutlined,
   BookOutlined,
   SaveOutlined,
-  FolderOpenOutlined,
   FilePdfOutlined,
   HistoryOutlined,
   ExportOutlined
@@ -24,7 +18,7 @@ import {
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
 import { NexFlowBrandIcon } from './ComponentIcon';
-import { CanvasManipulatorMenu } from './CanvasManipulatorMenu';
+import { EnterpriseMenuBar } from './CanvasManipulatorMenu';
 
 export const TopNav: React.FC = () => {
   const {
@@ -39,30 +33,21 @@ export const TopNav: React.FC = () => {
     toggleCableScheduleModal,
     toggleWizardModal,
     toggleLibraryModal,
-    toggleSaveAssemblyModal,
     toggleProjectsModal,
     openDesignReportModal,
     openVersionDiffModal,
     openExportCenterModal,
     engineeringStatus,
     setEngineeringStatus,
-    savedProjects,
     currentProjectName,
     isProjectDirty,
     saveCurrentProject,
     libraries,
-    autoLayout,
     isSimulating,
     toggleSimulation,
     simulationSpeed,
     setSimulationSpeed,
-    triggerPacketBurst,
-    loadSystemDesign,
-    clearCanvas,
-    undo,
-    redo,
-    historyIndex,
-    history
+    triggerPacketBurst
   } = useGraphStore();
 
   const errorCount = validationIssues.filter((i) => i.severity === 'CRITICAL' || i.severity === 'ERROR').length;
@@ -70,33 +55,34 @@ export const TopNav: React.FC = () => {
   return (
     <div
       style={{
-        height: 52,
-        backgroundColor: '#0f172a',
-        borderBottom: '1px solid #334155',
+        height: 48,
+        backgroundColor: '#090d16',
+        borderBottom: '1px solid #1e293b',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 16px',
+        padding: '0 14px',
         zIndex: 30
       }}
     >
-      {/* Brand & Project Info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <NexFlowBrandIcon size={32} />
+      {/* 1. Left: Brand & Domain & Project Name */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Brand Logo & Name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <NexFlowBrandIcon size={28} />
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em', color: '#f8fafc', lineHeight: 1.1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em', color: '#f8fafc', lineHeight: 1.1 }}>
               Nex<span style={{ color: '#38bdf8' }}>Flow</span>
             </div>
-            <div style={{ fontSize: 9.5, color: '#94a3b8', fontWeight: 600, letterSpacing: '0.04em' }}>
-              ENGINEERING SIMULATION
+            <div style={{ fontSize: 8.5, color: '#64748b', fontWeight: 700, letterSpacing: '0.06em' }}>
+              ENTERPRISE CAD
             </div>
           </div>
         </div>
 
-        <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
+        <div style={{ width: 1, height: 18, backgroundColor: '#334155' }} />
 
-        {/* Domain Selector & Workspace Isolation */}
+        {/* Domain Selector & Isolation Mode */}
         <Space size={6}>
           <Select<EngineeringDomain>
             value={activeDomain}
@@ -110,7 +96,7 @@ export const TopNav: React.FC = () => {
                 message.info(`Switched to ${val} domain. Workspace isolated & Palette updated.`);
               }
             }}
-            style={{ width: 145 }}
+            style={{ width: 140 }}
             size="small"
             options={[
               { label: '🌐 Network', value: 'NETWORK' },
@@ -122,10 +108,10 @@ export const TopNav: React.FC = () => {
             ]}
           />
 
-          <Tooltip title={domainFilterMode === 'ACTIVE_ONLY' ? 'Active Domain Isolated: components from other domains are hidden to allow room for this domain. Click to show all domains.' : 'All Domains Visible (Overlay): click to isolate active domain only.'}>
+          <Tooltip title={domainFilterMode === 'ACTIVE_ONLY' ? 'Active Domain Isolated: components from other domains are hidden to allow room. Click to show all.' : 'All Domains Visible: click to isolate active domain.'}>
             <Tag
               color={domainFilterMode === 'ACTIVE_ONLY' ? '#0284c7' : '#7c3aed'}
-              style={{ cursor: 'pointer', margin: 0, padding: '1px 7px', fontSize: 11, borderRadius: 4, fontWeight: 600 }}
+              style={{ cursor: 'pointer', margin: 0, padding: '1px 6px', fontSize: 10.5, borderRadius: 4, fontWeight: 600 }}
               onClick={toggleDomainFilterMode}
             >
               {domainFilterMode === 'ACTIVE_ONLY' ? '🔒 Isolated' : '🌐 Overlay'}
@@ -133,213 +119,166 @@ export const TopNav: React.FC = () => {
           </Tooltip>
         </Space>
 
-        <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
+        <div style={{ width: 1, height: 18, backgroundColor: '#334155' }} />
 
-        {/* Projects Manager Button & Quick Save */}
-        <Space size="small">
-          <Badge count={savedProjects.length} size="small" offset={[-2, 4]} color="#10b981">
-            <Button
-              icon={<FolderOpenOutlined style={{ color: '#10b981' }} />}
-              onClick={() => toggleProjectsModal(true)}
-              style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500 }}
-              size="middle"
-            >
-              Projects
-            </Button>
-          </Badge>
-
-          <Button
-            icon={<SaveOutlined style={{ color: isProjectDirty ? '#f59e0b' : '#38bdf8' }} />}
-            onClick={() => {
-              saveCurrentProject();
-              message.success(`Saved "${currentProjectName}" successfully!`);
-            }}
-            style={{ 
-              backgroundColor: '#1e293b', 
-              borderColor: isProjectDirty ? '#f59e0b' : '#334155', 
-              color: '#f8fafc' 
-            }}
-            size="middle"
-          >
-            Save {isProjectDirty && '•'}
-          </Button>
-
+        {/* Project Name Tag & Quick Save */}
+        <Space size={4}>
           <Tag 
             color="blue" 
             style={{ 
               cursor: 'pointer', 
               padding: '2px 8px', 
-              fontSize: 12, 
+              fontSize: 11.5, 
               borderRadius: 4,
-              backgroundColor: 'rgba(2, 132, 199, 0.15)',
+              backgroundColor: 'rgba(2, 132, 199, 0.12)',
               borderColor: '#0284c7',
-              color: '#38bdf8'
+              color: '#38bdf8',
+              margin: 0
             }}
             onClick={() => toggleProjectsModal(true)}
+            title="Click to manage saved projects"
           >
-            📁 {currentProjectName} {isProjectDirty ? '(Unsaved)' : ''}
+            📁 {currentProjectName} {isProjectDirty ? '•' : ''}
           </Tag>
+          <Tooltip title="Quick Save (Ctrl+S)">
+            <Button
+              type="text"
+              size="small"
+              icon={<SaveOutlined style={{ color: isProjectDirty ? '#f59e0b' : '#38bdf8', fontSize: 13 }} />}
+              onClick={() => {
+                saveCurrentProject();
+                message.success(`Saved "${currentProjectName}" successfully!`);
+              }}
+            />
+          </Tooltip>
         </Space>
       </div>
 
-      {/* Primary Actions: Simulation, Validation, Reports */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Undo / Redo */}
-        <Space size={2}>
-          <Tooltip title="Undo (Ctrl+Z)">
-            <Button
-              type="text"
-              icon={<UndoOutlined style={{ color: historyIndex > 0 ? '#cbd5e1' : '#475569' }} />}
-              disabled={historyIndex <= 0}
-              onClick={undo}
-            />
-          </Tooltip>
-          <Tooltip title="Redo (Ctrl+Y)">
-            <Button
-              type="text"
-              icon={<RedoOutlined style={{ color: historyIndex < history.length - 1 ? '#cbd5e1' : '#475569' }} />}
-              disabled={historyIndex >= history.length - 1}
-              onClick={redo}
-            />
-          </Tooltip>
-        </Space>
+      {/* 2. Center: Standard Enterprise Menu Bar (Edit, View, Arrange, Tools, Blueprints) */}
+      <div 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          backgroundColor: '#0f172a', 
+          border: '1px solid #1e293b', 
+          borderRadius: 6, 
+          padding: '2px 6px' 
+        }}
+      >
+        <EnterpriseMenuBar />
+      </div>
 
-        <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
-
-        {/* Canvas Manipulation & Component Menu */}
-        <CanvasManipulatorMenu />
-
-        {/* System Topology Wizard */}
+      {/* 3. Right: Command Actions, Documentation, Validation, Simulation */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Topology Wizard Primary Action */}
         <Button
           type="primary"
           icon={<BuildOutlined />}
+          size="small"
           onClick={() => toggleWizardModal(true)}
-          style={{ backgroundColor: '#0284c7', borderColor: '#0284c7', fontWeight: 600 }}
+          style={{ backgroundColor: '#0284c7', borderColor: '#0284c7', fontWeight: 600, fontSize: 12 }}
         >
-          Topology Wizard
+          Wizard
         </Button>
 
-        {/* Libraries Manager */}
-        <Badge count={libraries.length} size="small" offset={[-2, 4]} color="#38bdf8">
+        {/* Component Libraries */}
+        <Badge count={libraries.length} size="small" offset={[-2, 2]} color="#38bdf8">
           <Button
             icon={<BookOutlined style={{ color: '#38bdf8' }} />}
+            size="small"
             onClick={() => toggleLibraryModal(true)}
-            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontSize: 12 }}
           >
             Libraries
           </Button>
         </Badge>
 
-        {/* Save Template Button */}
-        <Tooltip title="Save selected devices or entire design as reusable template">
-          <Button
-            icon={<SaveOutlined style={{ color: '#10b981' }} />}
-            onClick={() => toggleSaveAssemblyModal(true)}
-            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-          >
-            Save Template
-          </Button>
-        </Tooltip>
-
-        {/* Auto Layout */}
-        <Tooltip title="Organize layout into clean hierarchical tiers">
-          <Button
-            icon={<PartitionOutlined />}
-            onClick={autoLayout}
-            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-          >
-            Auto Layout
-          </Button>
-        </Tooltip>
-
-        {/* Demo Benchmark & System Design Switcher */}
+        {/* Documentation & Reports Dropdown */}
         <Dropdown
           menu={{
             items: [
               {
-                key: 'MULTI_DOMAIN',
-                icon: <BuildOutlined style={{ color: '#06b6d4' }} />,
-                label: (
-                  <div>
-                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Integrated Smart Facility</span>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Network Fiber + 400V Power + 7°C Chilled Water</div>
-                  </div>
-                ),
-                onClick: () => {
-                  loadSystemDesign('MULTI_DOMAIN');
-                  message.success('Loaded Multi-Domain Facility (Simultaneous Data, Electricity & Water Flow)');
-                }
+                key: 'doc-boq',
+                icon: <DollarOutlined style={{ color: '#10b981' }} />,
+                label: 'Bill of Materials (BOM / BOQ)',
+                onClick: () => toggleBOQModal(true)
               },
               {
-                key: 'NETWORK',
-                icon: <BranchesOutlined style={{ color: '#38bdf8' }} />,
-                label: (
-                  <div>
-                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Corporate Enterprise Network</span>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Router, UTM Firewall, Switches & Workstations</div>
-                  </div>
-                ),
-                onClick: () => {
-                  loadSystemDesign('NETWORK');
-                  message.success('Loaded Corporate Enterprise Network (Data Packets Flow)');
-                }
+                key: 'doc-cables',
+                icon: <TableOutlined style={{ color: '#38bdf8' }} />,
+                label: 'Cable Schedule & Run List',
+                onClick: () => toggleCableScheduleModal(true)
               },
               {
-                key: 'ELECTRICAL',
-                icon: <ThunderboltFilled style={{ color: '#facc15' }} />,
-                label: (
-                  <div>
-                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Critical Electrical Distribution</span>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>Grid Substation, Diesel Generator, ATS & 40kVA UPS</div>
-                  </div>
-                ),
-                onClick: () => {
-                  loadSystemDesign('ELECTRICAL');
-                  message.success('Loaded Critical Electrical Power System (AC Current Flow)');
-                }
+                key: 'doc-report',
+                icon: <FilePdfOutlined style={{ color: '#0284c7' }} />,
+                label: 'Specification Report (PDF)',
+                onClick: openDesignReportModal
               },
               {
-                key: 'PLUMBING',
-                icon: <TableOutlined style={{ color: '#0284c7' }} />,
-                label: (
-                  <div>
-                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>Data Center Chilled Water System</span>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>100-Ton Chiller, VFD Pumps, CRAH Coolers & Cooling Tower</div>
-                  </div>
-                ),
-                onClick: () => {
-                  loadSystemDesign('PLUMBING');
-                  message.success('Loaded Chilled Water Cooling System (Fluid/Water Flow)');
-                }
+                key: 'doc-diff',
+                icon: <HistoryOutlined style={{ color: '#f59e0b' }} />,
+                label: 'Revision History & Variance Diff',
+                onClick: openVersionDiffModal
               },
+              { type: 'divider' },
               {
-                key: 'CCTV',
-                icon: <BuildOutlined style={{ color: '#d946ef' }} />,
-                label: (
-                  <div>
-                    <span style={{ fontWeight: 600, color: '#f8fafc' }}>CCTV & Perimeter Surveillance</span>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>4K PTZ IP Cameras, PoE Switch & 64-Ch NVR</div>
-                  </div>
-                ),
-                onClick: () => {
-                  loadSystemDesign('CCTV');
-                  message.success('Loaded CCTV Video Surveillance System (RTSP Video Streams)');
-                }
+                key: 'doc-export',
+                icon: <ExportOutlined style={{ color: '#10b981' }} />,
+                label: 'Project Export Center',
+                onClick: openExportCenterModal
               }
             ]
           }}
           placement="bottomRight"
         >
           <Button
-            icon={<BranchesOutlined style={{ color: '#38bdf8' }} />}
-            style={{ backgroundColor: '#1e293b', borderColor: '#0284c7', color: '#f8fafc', fontWeight: 600 }}
+            size="small"
+            icon={<FilePdfOutlined style={{ color: '#38bdf8' }} />}
+            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontSize: 12 }}
           >
-            System Designs ▾
+            Documentation ▾
           </Button>
         </Dropdown>
 
+        {/* Engineering Validation Badge & Button */}
+        <Badge count={errorCount} offset={[-2, 2]}>
+          <Button
+            size="small"
+            icon={errorCount > 0 ? <ExclamationCircleOutlined style={{ color: '#ef4444' }} /> : <CheckCircleOutlined style={{ color: '#10b981' }} />}
+            onClick={() => toggleValidationDrawer(true)}
+            style={{
+              backgroundColor: '#1e293b',
+              borderColor: errorCount > 0 ? '#ef4444' : '#334155',
+              color: '#f8fafc',
+              fontSize: 12
+            }}
+          >
+            Validate
+          </Button>
+        </Badge>
+
+        {/* Engineering Governance Status */}
+        <Select
+          value={engineeringStatus}
+          size="small"
+          onChange={(s) => {
+            setEngineeringStatus(s);
+            message.success(`Design status set to ${s}`);
+          }}
+          style={{ width: 95 }}
+          options={[
+            { label: '⚪ Draft', value: 'DRAFT' },
+            { label: '🟡 Review', value: 'IN_REVIEW' },
+            { label: '🟢 Approved', value: 'APPROVED' },
+            { label: '🔒 Locked', value: 'LOCKED' }
+          ]}
+        />
+
+        <div style={{ width: 1, height: 18, backgroundColor: '#334155' }} />
+
         {/* Simulation Controls */}
-        <Space.Compact>
+        <Space.Compact size="small">
           <Button
             type={isSimulating ? 'primary' : 'default'}
             icon={isSimulating ? <PauseCircleFilled /> : <PlayCircleFilled style={{ color: '#10b981' }} />}
@@ -348,7 +287,7 @@ export const TopNav: React.FC = () => {
               backgroundColor: isSimulating ? '#0284c7' : '#1e293b',
               borderColor: '#334155',
               color: '#f8fafc',
-              fontWeight: 500
+              fontSize: 12
             }}
           >
             {isSimulating ? 'Simulating' : 'Simulate'}
@@ -364,7 +303,8 @@ export const TopNav: React.FC = () => {
           <Select
             value={simulationSpeed}
             onChange={(s) => setSimulationSpeed(s)}
-            style={{ width: 78 }}
+            style={{ width: 68 }}
+            size="small"
             options={[
               { label: '0.25x', value: 0.25 },
               { label: '0.5x', value: 0.5 },
@@ -373,93 +313,6 @@ export const TopNav: React.FC = () => {
             ]}
           />
         </Space.Compact>
-
-        {/* Engineering Governance Status Tag */}
-        <Select
-          value={engineeringStatus}
-          onChange={(s) => {
-            setEngineeringStatus(s);
-            message.success(`Design status set to ${s}`);
-          }}
-          style={{ width: 105 }}
-          options={[
-            { label: '⚪ Draft', value: 'DRAFT' },
-            { label: '🟡 In Review', value: 'IN_REVIEW' },
-            { label: '🟢 Approved', value: 'APPROVED' },
-            { label: '🔒 Locked', value: 'LOCKED' }
-          ]}
-        />
-
-        {/* Engineering Validation Badge & Button */}
-        <Badge count={errorCount} offset={[-4, 4]}>
-          <Button
-            icon={errorCount > 0 ? <ExclamationCircleOutlined style={{ color: '#ef4444' }} /> : <CheckCircleOutlined style={{ color: '#10b981' }} />}
-            onClick={() => toggleValidationDrawer(true)}
-            style={{
-              backgroundColor: '#1e293b',
-              borderColor: errorCount > 0 ? '#ef4444' : '#334155',
-              color: '#f8fafc'
-            }}
-          >
-            Validate ({validationIssues.length})
-          </Button>
-        </Badge>
-
-        {/* Milestone 3: Engineering Design Report */}
-        <Button
-          icon={<FilePdfOutlined style={{ color: '#0284c7' }} />}
-          onClick={openDesignReportModal}
-          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500 }}
-          title="Generate client-ready engineering design PDF specification report"
-        >
-          Report
-        </Button>
-
-        {/* Milestone 3: Revisions & Diff Tool */}
-        <Button
-          icon={<HistoryOutlined style={{ color: '#f59e0b' }} />}
-          onClick={openVersionDiffModal}
-          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500 }}
-          title="Compare design revisions side-by-side with variance tracking"
-        >
-          Revisions
-        </Button>
-
-        {/* Bill of Quantities Modal */}
-        <Button
-          icon={<DollarOutlined style={{ color: '#10b981' }} />}
-          onClick={() => toggleBOQModal(true)}
-          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-        >
-          BOQ
-        </Button>
-
-        {/* Cable Schedule Modal */}
-        <Button
-          icon={<TableOutlined style={{ color: '#38bdf8' }} />}
-          onClick={() => toggleCableScheduleModal(true)}
-          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
-        >
-          Cables
-        </Button>
-
-        {/* Milestone 3: Multi-Format Export Center */}
-        <Button
-          icon={<ExportOutlined style={{ color: '#10b981' }} />}
-          onClick={openExportCenterModal}
-          style={{ backgroundColor: '#0284c7', borderColor: '#0284c7', color: '#f8fafc', fontWeight: 600 }}
-        >
-          Export Center
-        </Button>
-
-        {/* Clear Canvas */}
-        <Tooltip title="Clear Canvas">
-          <Button
-            type="text"
-            icon={<ClearOutlined style={{ color: '#ef4444' }} />}
-            onClick={clearCanvas}
-          />
-        </Tooltip>
       </div>
     </div>
   );
