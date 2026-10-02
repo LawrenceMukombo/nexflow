@@ -37,7 +37,8 @@ import {
   CodeOutlined,
   BarChartOutlined,
   AlertOutlined,
-  DeploymentUnitOutlined
+  DeploymentUnitOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -93,6 +94,7 @@ export const EnterpriseMenuBar: React.FC = () => {
     openAnalyticsModal,
     openFailoverModal,
     openDigitalTwinModal,
+    openCollabDrawer,
     toggleValidationDrawer,
     validationIssues,
     openCliModal
@@ -565,6 +567,12 @@ export const EnterpriseMenuBar: React.FC = () => {
       icon: <DeploymentUnitOutlined style={{ color: '#06b6d4' }} />,
       label: '3D Isometric BIM & Digital Twin Viewer...',
       onClick: openDigitalTwinModal
+    },
+    {
+      key: 'tool-collab',
+      icon: <TeamOutlined style={{ color: '#ec4899' }} />,
+      label: 'Multi-Engineer Collaboration & Review...',
+      onClick: openCollabDrawer
     },
     { type: 'divider' },
     {

@@ -28,7 +28,10 @@ import {
   SnippetsOutlined,
   AppstoreOutlined,
   SaveOutlined,
-  CodeOutlined
+  CodeOutlined,
+  LockOutlined,
+  MessageOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { ComponentPort, EngineeringComponent, EngineeringConnection } from '@omniflow/shared-types';
 import { checkNodeNetworkConfig } from '@omniflow/network-engine';
@@ -97,7 +100,12 @@ export const Canvas: React.FC = () => {
     activeDomain,
     domainFilterMode,
     setDomainFilterMode,
-    toggleWizardModal
+    toggleWizardModal,
+    collabSession,
+    stepCollabPresenceTick,
+    acquireNodeLock,
+    releaseNodeLock,
+    openCollabDrawer
   } = useGraphStore();
 
   const isNodeVisible = useCallback((node: EngineeringComponent) => {
@@ -180,6 +188,15 @@ export const Canvas: React.FC = () => {
     clearSelection, 
     cancelConnection
   ]);
+
+  // Real-Time Peer Collaborator Presence Movement Tick
+  useEffect(() => {
+    if (!collabSession.isCollabEnabled) return;
+    const timer = setInterval(() => {
+      stepCollabPresenceTick();
+    }, 2500);
+    return () => clearInterval(timer);
+  }, [collabSession.isCollabEnabled, stepCollabPresenceTick]);
 
   // Pan Canvas & Rubber-Band Marquee Selection
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -651,6 +668,37 @@ export const Canvas: React.FC = () => {
           onClick: () => toggleSaveAssemblyModal(true)
         }
       ] : []),
+      { type: 'divider' },
+      {
+        key: 'collab-actions',
+        icon: <TeamOutlined style={{ color: '#ec4899' }} />,
+        label: 'Peer Collaboration & Lock...',
+        children: [
+          collabSession.locks[node.id] ? {
+            key: 'release-lock',
+            icon: <LockOutlined style={{ color: '#10b981' }} />,
+            label: `Release Lock (${collabSession.locks[node.id].collaboratorName})`,
+            onClick: () => {
+              releaseNodeLock(node.id);
+              message.success(`Released lock on ${node.tag}`);
+            }
+          } : {
+            key: 'acquire-lock',
+            icon: <LockOutlined style={{ color: '#d97706' }} />,
+            label: 'Acquire Component Soft-Lock',
+            onClick: () => {
+              const ok = acquireNodeLock(node.id, 'Engineering Peer Review');
+              if (ok) message.success(`Acquired soft-lock on ${node.tag}`);
+            }
+          },
+          {
+            key: 'open-review',
+            icon: <MessageOutlined style={{ color: '#38bdf8' }} />,
+            label: 'Open Collaboration & Review Drawer',
+            onClick: () => openCollabDrawer()
+          }
+        ]
+      },
       { type: 'divider' },
       {
         key: 'delete',
@@ -1775,6 +1823,26 @@ export const Canvas: React.FC = () => {
                       IP ERROR
                     </Tag>
                   )}
+                  {collabSession.locks[node.id] && (
+                    <Tooltip title={`Locked by ${collabSession.locks[node.id].collaboratorName} (${collabSession.locks[node.id].reason || 'In Review'})`}>
+                      <Tag color="#d97706" style={{ margin: 0, fontSize: 9, fontWeight: 700, padding: '0 4px', lineHeight: '14px', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                        <LockOutlined style={{ fontSize: 9 }} />
+                        <span>{collabSession.locks[node.id].collaboratorName.split(' ')[0]}</span>
+                      </Tag>
+                    </Tooltip>
+                  )}
+                  {(() => {
+                    const notes = collabSession.annotations.filter(a => a.componentId === node.id && !a.resolved);
+                    if (notes.length === 0) return null;
+                    return (
+                      <Tooltip title={`${notes.length} Peer Review Note(s)`}>
+                        <Tag color="#ec4899" style={{ margin: 0, fontSize: 9, fontWeight: 700, padding: '0 4px', lineHeight: '14px', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                          <MessageOutlined style={{ fontSize: 9 }} />
+                          <span>{notes.length}</span>
+                        </Tag>
+                      </Tooltip>
+                    );
+                  })()}
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#f8fafc' }}>
                     {node.type.replace('_', ' ').slice(0, 14)}
                   </span>
@@ -1966,6 +2034,60 @@ export const Canvas: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Multi-Engineer Live Peer Presence Cursors */}
+        {collabSession.isCollabEnabled && Object.values(collabSession.activeCollaborators).map((peer) => {
+          if (!peer.cursor) return null;
+          return (
+            <div
+              key={peer.id}
+              style={{
+                position: 'absolute',
+                left: peer.cursor.x,
+                top: peer.cursor.y,
+                pointerEvents: 'none',
+                zIndex: 65,
+                transition: 'left 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.8s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start'
+              }}
+            >
+              {/* SVG Cursor Pointer Arrow */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.6))' }}>
+                <path
+                  d="M3 3L10.07 20.97L13.58 13.58L20.97 10.07L3 3Z"
+                  fill={peer.color}
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {/* Engineer Name & Status Badge */}
+              <div
+                style={{
+                  marginLeft: 14,
+                  marginTop: -4,
+                  backgroundColor: peer.color,
+                  color: '#ffffff',
+                  padding: '2px 8px',
+                  borderRadius: 10,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: 0.2,
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
+              >
+                <span>{peer.name}</span>
+                <span style={{ fontSize: 8, opacity: 0.85, textTransform: 'uppercase' }}>• {peer.role.replace('_', ' ').split(' ')[0]}</span>
               </div>
             </div>
           );

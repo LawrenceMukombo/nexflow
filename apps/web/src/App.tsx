@@ -22,6 +22,7 @@ import { DeviceCliModal } from './components/DeviceCliModal';
 import { EngineeringAnalyticsModal } from './components/EngineeringAnalyticsModal';
 import { FailoverSimulationModal } from './components/FailoverSimulationModal';
 import { DigitalTwinViewerModal } from './components/DigitalTwinViewerModal';
+import { CollaborationDrawer } from './components/CollaborationDrawer';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -112,6 +113,7 @@ export const App: React.FC = () => {
         <EngineeringAnalyticsModal />
         <FailoverSimulationModal />
         <DigitalTwinViewerModal />
+        <CollaborationDrawer />
       </div>
     </ConfigProvider>
     </>

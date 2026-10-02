@@ -16,7 +16,8 @@ import {
   ExportOutlined,
   BarChartOutlined,
   AlertOutlined,
-  DeploymentUnitOutlined
+  DeploymentUnitOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -43,6 +44,7 @@ export const TopNav: React.FC = () => {
     openExportCenterModal,
     openFailoverModal,
     openDigitalTwinModal,
+    openCollabDrawer,
     engineeringStatus,
     setEngineeringStatus,
     currentProjectName,
@@ -229,6 +231,28 @@ export const TopNav: React.FC = () => {
           3D BIM Twin
         </Button>
 
+        {/* Real-Time Peer Engineering Collaboration */}
+        <Tooltip title="Real-Time Peer Engineering Collaboration (4 Online)">
+          <Button
+            size="small"
+            icon={<TeamOutlined style={{ color: '#10b981' }} />}
+            onClick={openCollabDrawer}
+            style={{ 
+              backgroundColor: '#1e293b', 
+              borderColor: '#10b981', 
+              color: '#f8fafc', 
+              fontSize: 12, 
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5
+            }}
+          >
+            <span>Team (4)</span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#10b981' }} />
+          </Button>
+        </Tooltip>
+
         {/* Documentation & Reports Dropdown */}
         <Dropdown
           menu={{
@@ -250,6 +274,12 @@ export const TopNav: React.FC = () => {
                 icon: <DeploymentUnitOutlined style={{ color: '#06b6d4' }} />,
                 label: '3D Isometric BIM & Digital Twin',
                 onClick: openDigitalTwinModal
+              },
+              {
+                key: 'doc-collab',
+                icon: <TeamOutlined style={{ color: '#10b981' }} />,
+                label: 'Peer Collaboration & Soft-Locks',
+                onClick: openCollabDrawer
               },
               { type: 'divider' },
               {

@@ -37,7 +37,12 @@ import {
   FailoverTelemetry,
   FailoverScenarioId,
   createInitialFailoverTelemetry,
-  stepFailoverSimulation
+  stepFailoverSimulation,
+  CollaborationSessionState,
+  createInitialCollaborationSession,
+  stepCollaboratorPresence,
+  acquireComponentLock,
+  releaseComponentLock
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
@@ -154,6 +159,8 @@ export interface GraphState {
   isFailoverModalOpen: boolean;
   isDigitalTwinModalOpen: boolean;
   failoverTelemetry: FailoverTelemetry;
+  collabSession: CollaborationSessionState;
+  isCollabDrawerOpen: boolean;
   engineeringStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED';
   designRevisions: DesignRevision[];
 
@@ -272,6 +279,15 @@ export interface GraphState {
   openDigitalTwinModal: () => void;
   closeDigitalTwinModal: () => void;
   toggleDigitalTwinModal: (open?: boolean) => void;
+  openCollabDrawer: () => void;
+  closeCollabDrawer: () => void;
+  toggleCollabDrawer: () => void;
+  toggleCollabEnabled: () => void;
+  addCollabAnnotation: (content: string, componentId?: string) => void;
+  resolveCollabAnnotation: (annotationId: string) => void;
+  stepCollabPresenceTick: () => void;
+  acquireNodeLock: (nodeId: string, reason?: string) => boolean;
+  releaseNodeLock: (nodeId: string) => void;
   selectFailoverScenario: (scenarioId: FailoverScenarioId) => void;
   toggleFailoverSimulation: (running?: boolean) => void;
   stepFailoverTick: (dtSec?: number) => void;
@@ -467,6 +483,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isFailoverModalOpen: false,
   isDigitalTwinModalOpen: false,
   failoverTelemetry: createInitialFailoverTelemetry('GRID_OUTAGE_ATS_FAILOVER'),
+  collabSession: createInitialCollaborationSession(),
+  isCollabDrawerOpen: false,
   engineeringStatus: 'DRAFT',
   designRevisions: [
     {
@@ -1928,6 +1946,56 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   closeDigitalTwinModal: () => set({ isDigitalTwinModalOpen: false }),
   toggleDigitalTwinModal: (open) => set((state) => ({
     isDigitalTwinModalOpen: open !== undefined ? open : !state.isDigitalTwinModalOpen
+  })),
+  openCollabDrawer: () => set({ isCollabDrawerOpen: true }),
+  closeCollabDrawer: () => set({ isCollabDrawerOpen: false }),
+  toggleCollabDrawer: () => set((state) => ({ isCollabDrawerOpen: !state.isCollabDrawerOpen })),
+  toggleCollabEnabled: () => set((state) => ({
+    collabSession: {
+      ...state.collabSession,
+      isCollabEnabled: !state.collabSession.isCollabEnabled
+    }
+  })),
+  addCollabAnnotation: (content, componentId) => set((state) => {
+    const newAnnot = {
+      id: `annot_${Date.now()}`,
+      componentId,
+      collaboratorId: state.collabSession.localCollaborator.id,
+      collaboratorName: state.collabSession.localCollaborator.name,
+      color: state.collabSession.localCollaborator.color,
+      content,
+      timestamp: 'Just now',
+      resolved: false
+    };
+    return {
+      collabSession: {
+        ...state.collabSession,
+        annotations: [newAnnot, ...state.collabSession.annotations]
+      }
+    };
+  }),
+  resolveCollabAnnotation: (annotationId) => set((state) => ({
+    collabSession: {
+      ...state.collabSession,
+      annotations: state.collabSession.annotations.map(a => 
+        a.id === annotationId ? { ...a, resolved: !a.resolved } : a
+      )
+    }
+  })),
+  stepCollabPresenceTick: () => set((state) => ({
+    collabSession: stepCollaboratorPresence(state.collabSession, 1.0)
+  })),
+  acquireNodeLock: (nodeId, reason) => {
+    const { collabSession } = get();
+    const result = acquireComponentLock(collabSession, nodeId, collabSession.localCollaborator, reason);
+    if (result.success) {
+      set({ collabSession: result.session });
+      return true;
+    }
+    return false;
+  },
+  releaseNodeLock: (nodeId) => set((state) => ({
+    collabSession: releaseComponentLock(state.collabSession, nodeId, state.collabSession.localCollaborator.id)
   })),
   selectFailoverScenario: (scenarioId) => set({
     failoverTelemetry: createInitialFailoverTelemetry(scenarioId)
