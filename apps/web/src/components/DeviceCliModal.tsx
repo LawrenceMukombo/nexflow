@@ -8,9 +8,11 @@ import {
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { executeCliCommand, CliCommandResult } from '../utils/cliNetworkEngine';
+import { isCiscoDevice, getCiscoPrompt, executeCiscoIosCommand, CiscoIosState } from '../utils/ciscoIosEngine';
 
 interface HistoryEntry {
   command: string;
+  prompt?: string;
   outputLines: string[];
   isStreaming?: boolean;
 }
@@ -25,6 +27,7 @@ export const DeviceCliModal: React.FC = () => {
   } = useGraphStore();
 
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(cliNodeId);
+  const [ciscoState, setCiscoState] = useState<CiscoIosState>({ mode: 'USER_EXEC' });
   const [inputVal, setInputVal] = useState('');
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [cmdHistory, setCmdHistory] = useState<string[]>([]);
@@ -39,8 +42,10 @@ export const DeviceCliModal: React.FC = () => {
   useEffect(() => {
     if (cliNodeId && graph.nodes[cliNodeId]) {
       setCurrentNodeId(cliNodeId);
+      setCiscoState({ mode: 'USER_EXEC' });
     } else if (!currentNodeId && Object.keys(graph.nodes).length > 0) {
       setCurrentNodeId(Object.keys(graph.nodes)[0]);
+      setCiscoState({ mode: 'USER_EXEC' });
     }
   }, [cliNodeId, graph.nodes]);
 
@@ -59,6 +64,11 @@ export const DeviceCliModal: React.FC = () => {
   }, [history, isStreaming]);
 
   const currentNode = currentNodeId ? graph.nodes[currentNodeId] : null;
+  const isCisco = currentNode ? isCiscoDevice(currentNode) : false;
+  const activePrompt = isCisco 
+    ? getCiscoPrompt(currentNode?.tag || 'Router', ciscoState.mode)
+    : 'C:\\Users\\Administrator>';
+
   const currentIp = currentNode 
     ? ((currentNode.properties.ipAddress || currentNode.properties.lanIp || currentNode.properties.managementIp || '0.0.0.0') as string)
     : '0.0.0.0';
@@ -83,7 +93,20 @@ export const DeviceCliModal: React.FC = () => {
       return;
     }
 
-    const result: CliCommandResult = executeCliCommand(graph, currentNodeId, trimmed);
+    const currentPrompt = activePrompt;
+    let result: CliCommandResult;
+
+    if (isCisco && currentNodeId) {
+      result = executeCiscoIosCommand(
+        graph,
+        currentNodeId,
+        trimmed,
+        ciscoState,
+        (newState) => setCiscoState(newState)
+      );
+    } else {
+      result = executeCliCommand(graph, currentNodeId, trimmed);
+    }
 
     // If ping command and target resolved, trigger canvas packet animation too!
     if (result.targetNodeId && trimmed.toLowerCase().startsWith('ping')) {
@@ -95,6 +118,7 @@ export const DeviceCliModal: React.FC = () => {
       setIsStreaming(true);
       const entry: HistoryEntry = {
         command: trimmed,
+        prompt: currentPrompt,
         outputLines: [],
         isStreaming: true
       };
@@ -111,6 +135,7 @@ export const DeviceCliModal: React.FC = () => {
             if (next.length > 0) {
               next[next.length - 1] = {
                 command: trimmed,
+                prompt: currentPrompt,
                 outputLines: accumulated,
                 isStreaming: false
               };
@@ -129,6 +154,7 @@ export const DeviceCliModal: React.FC = () => {
           if (next.length > 0) {
             next[next.length - 1] = {
               command: trimmed,
+              prompt: currentPrompt,
               outputLines: accumulated,
               isStreaming: true
             };
@@ -145,6 +171,7 @@ export const DeviceCliModal: React.FC = () => {
         ...prev,
         {
           command: trimmed,
+          prompt: currentPrompt,
           outputLines: result.outputLines,
           isStreaming: false
         }
@@ -212,7 +239,7 @@ export const DeviceCliModal: React.FC = () => {
         }
       }}
     >
-      {/* Authentic Windows Command Prompt Titlebar */}
+      {/* Authentic Titlebar */}
       <div 
         style={{
           display: 'flex',
@@ -225,28 +252,31 @@ export const DeviceCliModal: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Windows CMD Icon */}
+          {/* CLI Icon */}
           <div 
             style={{
-              width: 18,
+              width: isCisco ? 26 : 18,
               height: 18,
-              backgroundColor: '#000000',
-              border: '1px solid #666666',
+              backgroundColor: isCisco ? '#0284c7' : '#000000',
+              border: isCisco ? '1px solid #38bdf8' : '1px solid #666666',
               borderRadius: 2,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 10,
-              fontWeight: 700,
+              fontSize: isCisco ? 9 : 10,
+              fontWeight: 800,
               color: '#ffffff',
               fontFamily: 'Consolas, monospace'
             }}
           >
-            &gt;_
+            {isCisco ? 'IOS' : '>_'}
           </div>
 
           <span style={{ fontSize: 12, fontWeight: 500, color: '#e5e7eb', fontFamily: 'Segoe UI, sans-serif' }}>
-            Administrator: Command Prompt — {currentNode?.tag || currentNode?.name || 'Device'} ({currentIp})
+            {isCisco 
+              ? `Cisco IOS CLI Console — [${currentNode?.tag || 'Router'}] (${currentNode?.name || 'Device'})`
+              : `Administrator: Command Prompt — ${currentNode?.tag || currentNode?.name || 'Device'} (${currentIp})`
+            }
           </span>
         </div>
 
@@ -259,6 +289,7 @@ export const DeviceCliModal: React.FC = () => {
               value={currentNodeId || undefined}
               onChange={(val) => {
                 setCurrentNodeId(val);
+                setCiscoState({ mode: 'USER_EXEC' });
                 setHistory([]);
               }}
               style={{ width: 170 }}
@@ -295,7 +326,7 @@ export const DeviceCliModal: React.FC = () => {
                 padding: '4px 8px',
                 borderRadius: 3
               }}
-              title="Close CMD"
+              title="Close Console"
             >
               <CloseOutlined style={{ fontSize: 12 }} />
             </button>
@@ -318,21 +349,32 @@ export const DeviceCliModal: React.FC = () => {
           cursor: 'text'
         }}
       >
-        {/* Authentic Windows OS Banner */}
-        <div style={{ color: '#cccccc', marginBottom: 12 }}>
-          Microsoft Windows [Version 10.0.22631.3296]<br />
-          (c) Microsoft Corporation. All rights reserved.<br />
-          <span style={{ color: '#64748b', fontSize: 11 }}>
-            [OmniFlow Network Diagnostic Subsystem: Active on Node &apos;{currentNode?.name}&apos;]
-          </span>
-        </div>
+        {/* Authentic OS Banner */}
+        {isCisco ? (
+          <div style={{ color: '#cccccc', marginBottom: 12 }}>
+            Cisco IOS Software, C2900 Software (C2900-UNIVERSALK9-M), Version 15.1(4)M4<br />
+            Technical Support: http://www.cisco.com/techsupport<br />
+            Copyright (c) 1986-2026 by Cisco Systems, Inc.<br />
+            <span style={{ color: '#38bdf8', fontSize: 11 }}>
+              [Packet Tracer Cisco IOS Subsystem: Connected to {currentNode?.tag || 'Router'}]
+            </span>
+          </div>
+        ) : (
+          <div style={{ color: '#cccccc', marginBottom: 12 }}>
+            Microsoft Windows [Version 10.0.22631.3296]<br />
+            (c) Microsoft Corporation. All rights reserved.<br />
+            <span style={{ color: '#64748b', fontSize: 11 }}>
+              [OmniFlow Network Diagnostic Subsystem: Active on Node &apos;{currentNode?.name}&apos;]
+            </span>
+          </div>
+        )}
 
         {/* Command Output History */}
         {history.map((item, idx) => (
           <div key={idx} style={{ marginBottom: 12 }}>
             {/* Prompt line */}
             <div style={{ color: '#f1f1f1' }}>
-              <span>C:\Users\Administrator&gt;</span>
+              <span>{item.prompt || activePrompt}</span>
               <span style={{ color: '#38bdf8', fontWeight: 600, marginLeft: 6 }}>{item.command}</span>
             </div>
 
@@ -340,21 +382,18 @@ export const DeviceCliModal: React.FC = () => {
             <div style={{ marginTop: 4 }}>
               {item.outputLines.map((line, lIdx) => {
                 let color = '#cccccc';
-                // Highlight packet lines
-                if (line.includes('Reply from')) {
-                  if (line.includes('bytes=')) {
-                    color = '#34d399'; // Green reply
-                  } else if (line.includes('unreachable')) {
-                    color = '#f87171'; // Red unreachable
-                  }
-                } else if (line.includes('timed out') || line.includes('Lost = 4 (100% loss)')) {
-                  color = '#f87171'; // Red timeout
-                } else if (line.startsWith('Windows IP Configuration') || line.startsWith('Active Connections')) {
-                  color = '#38bdf8'; // Cyan header
-                } else if (line.includes('IPv4 Address') || line.includes('Subnet Mask') || line.includes('Default Gateway')) {
-                  color = '#f8fafc'; // Crisp white
-                } else if (line.includes('WARNING:')) {
-                  color = '#facc15'; // Amber warning
+                if (line.includes('Reply from') || line.includes('Success rate is 100 percent')) {
+                  color = '#34d399';
+                } else if (line.includes('unreachable') || line.includes('timed out') || line.includes('Success rate is 0 percent')) {
+                  color = '#f87171';
+                } else if (line.startsWith('Windows IP Configuration') || line.startsWith('Building configuration') || line.startsWith('Codes:')) {
+                  color = '#38bdf8';
+                } else if (line.includes('up') && line.includes('GigabitEthernet')) {
+                  color = '#4ade80';
+                } else if (line.includes('down')) {
+                  color = '#f87171';
+                } else if (line.startsWith('%')) {
+                  color = '#facc15';
                 }
 
                 return (
@@ -370,7 +409,7 @@ export const DeviceCliModal: React.FC = () => {
         {/* Active Command Prompt Line */}
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ color: '#f1f1f1', whiteSpace: 'nowrap' }}>
-            C:\Users\Administrator&gt;
+            {activePrompt}
           </span>
           <input
             ref={inputRef}
@@ -390,7 +429,13 @@ export const DeviceCliModal: React.FC = () => {
               marginLeft: 6,
               caretColor: '#ffffff'
             }}
-            placeholder={isStreaming ? 'Transmitting packets...' : 'Type ping, ipconfig, ifconfig, tracert, arp -a, help...'}
+            placeholder={
+              isStreaming 
+                ? 'Transmitting packets...' 
+                : isCisco 
+                  ? 'Type enable, conf t, show ip int brief, show ip route, show mac address-table, ping...'
+                  : 'Type ping, ipconfig, tracert, arp -a, help...'
+            }
           />
         </div>
 
@@ -413,73 +458,249 @@ export const DeviceCliModal: React.FC = () => {
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginRight: 2 }}>QUICK CMD:</span>
           
-          <button
-            onClick={() => runCommand(`ping ${sampleTargetIp}`)}
-            disabled={isStreaming}
-            style={{
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#38bdf8',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 11,
-              fontFamily: 'Consolas, monospace',
-              cursor: isStreaming ? 'not-allowed' : 'pointer'
-            }}
-          >
-            ping {sampleTargetIp}
-          </button>
+          {isCisco ? (
+            <>
+              <button
+                onClick={() => runCommand('enable')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#38bdf8',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                enable
+              </button>
 
-          <button
-            onClick={() => runCommand(`ping ${defaultGateway}`)}
-            disabled={isStreaming}
-            style={{
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#38bdf8',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 11,
-              fontFamily: 'Consolas, monospace',
-              cursor: isStreaming ? 'not-allowed' : 'pointer'
-            }}
-          >
-            ping Gateway ({defaultGateway})
-          </button>
+              <button
+                onClick={() => runCommand('configure terminal')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#38bdf8',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                conf t
+              </button>
 
-          <button
-            onClick={() => runCommand('ipconfig')}
-            disabled={isStreaming}
-            style={{
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#a78bfa',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 11,
-              fontFamily: 'Consolas, monospace',
-              cursor: isStreaming ? 'not-allowed' : 'pointer'
-            }}
-          >
-            ipconfig
-          </button>
+              <button
+                onClick={() => runCommand('show ip interface brief')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#4ade80',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                show ip int br
+              </button>
 
-          <button
-            onClick={() => runCommand('ipconfig /all')}
-            disabled={isStreaming}
-            style={{
-              background: '#1e293b',
-              border: '1px solid #334155',
-              color: '#a78bfa',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 11,
-              fontFamily: 'Consolas, monospace',
-              cursor: isStreaming ? 'not-allowed' : 'pointer'
-            }}
-          >
-            ipconfig /all
-          </button>
+              <button
+                onClick={() => runCommand('show ip route')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#4ade80',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                show ip route
+              </button>
+
+              <button
+                onClick={() => runCommand('show mac address-table')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#c084fc',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                show mac
+              </button>
+
+              <button
+                onClick={() => runCommand(`ping ${sampleTargetIp}`)}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#facc15',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ping {sampleTargetIp}
+              </button>
+
+              <button
+                onClick={() => runCommand('show running-config')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#94a3b8',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                show run
+              </button>
+
+              <button
+                onClick={() => runCommand('wr')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#38bdf8',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                wr
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => runCommand(`ping ${sampleTargetIp}`)}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#38bdf8',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ping {sampleTargetIp}
+              </button>
+
+              <button
+                onClick={() => runCommand(`ping ${defaultGateway}`)}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#38bdf8',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ping Gateway
+              </button>
+
+              <button
+                onClick={() => runCommand('ipconfig')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#a78bfa',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ipconfig
+              </button>
+
+              <button
+                onClick={() => runCommand('ipconfig /all')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#a78bfa',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                ipconfig /all
+              </button>
+
+              <button
+                onClick={() => runCommand('tracert ' + sampleTargetIp)}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#34d399',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                tracert
+              </button>
+
+              <button
+                onClick={() => runCommand('arp -a')}
+                disabled={isStreaming}
+                style={{
+                  background: '#1e293b',
+                  border: '1px solid #334155',
+                  color: '#facc15',
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 11,
+                  fontFamily: 'Consolas, monospace',
+                  cursor: isStreaming ? 'not-allowed' : 'pointer'
+                }}
+              >
+                arp -a
+              </button>
+            </>
+          )}
 
           <button
             onClick={() => runCommand('ifconfig')}

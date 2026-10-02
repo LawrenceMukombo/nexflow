@@ -124,6 +124,76 @@ export interface SimulationPacket {
   label?: string;          // Human-readable flow label e.g. "230V • 14.2A", "3.8 L/s • 7°C", "TCP 1500B"
   status: 'ACTIVE' | 'CONGESTED' | 'FAILED' | 'DELIVERED';
   color?: string;
+  pdu?: PduDetails;
+  isEnvelope?: boolean;
+}
+
+export interface PduLayerDetail {
+  layer: number; // 1 to 7
+  layerName: string; // e.g. "Physical", "Data Link", "Network", "Transport", "Application"
+  description: string;
+}
+
+export interface PduDetails {
+  packetId: string;
+  sourceTag: string;
+  targetTag: string;
+  currentDeviceTag: string;
+  protocol: 'ICMP' | 'ARP' | 'HTTP' | 'DNS' | 'TCP' | 'DHCP' | 'UDP' | string;
+  inLayers: PduLayerDetail[];
+  outLayers: PduLayerDetail[];
+  ethernetHeader: {
+    preamble: string;
+    destMac: string;
+    srcMac: string;
+    typeHex: string;
+  };
+  ipHeader: {
+    version: number;
+    ihl: number;
+    tos: string;
+    totalLengthBytes: number;
+    id: number;
+    flags: string;
+    ttl: number;
+    protocolNum: number;
+    checksum: string;
+    srcIp: string;
+    destIp: string;
+  };
+  payloadHeader?: {
+    type: string;
+    srcPort?: number;
+    destPort?: number;
+    seqNum?: number;
+    ackNum?: number;
+    flags?: string;
+    icmpType?: number;
+    icmpCode?: number;
+    info: string;
+  };
+}
+
+export interface SimulationEvent {
+  id: string;
+  timeSec: number;
+  lastDeviceTag: string;
+  atDeviceTag: string;
+  type: 'ICMP' | 'ARP' | 'HTTP' | 'DNS' | 'TCP' | 'DHCP' | 'UDP' | string;
+  info: string;
+  status: 'SENT' | 'FORWARDED' | 'RECEIVED' | 'DROPPED' | 'REPLY';
+  color: string;
+  pdu: PduDetails;
+}
+
+export interface PacketTracerScenario {
+  id: string;
+  sourceTag: string;
+  destTag: string;
+  type: string;
+  status: 'In Progress' | 'Successful' | 'Failed';
+  timeSec: number;
+  color: string;
 }
 
 export interface SimulationTelemetry {

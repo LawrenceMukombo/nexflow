@@ -52,6 +52,11 @@ export const Canvas: React.FC = () => {
     simulationSpeed,
     simulationTick,
     telemetry,
+    isAddingPdu,
+    pduSourceNodeId,
+    setPduSourceNode,
+    dispatchSimplePdu,
+    openPduModal,
     showDataFlow,
     showElectricFlow,
     showFluidFlow,
@@ -1310,6 +1315,51 @@ export const Canvas: React.FC = () => {
         </div>
       )}
 
+      {/* Cisco Packet Tracer Simple PDU Tool Banner */}
+      {isAddingPdu && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 30,
+            backgroundColor: '#581c87',
+            border: '1px solid #c084fc',
+            borderRadius: 6,
+            padding: '8px 16px',
+            fontSize: 12,
+            fontWeight: 600,
+            color: '#f8fafc',
+            boxShadow: '0 8px 24px rgba(168, 85, 247, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12
+          }}
+        >
+          <span>
+            {pduSourceNodeId 
+              ? `✉️ Source: ${graph.nodes[pduSourceNodeId]?.tag || 'Device'} ➔ Click Destination device to Ping` 
+              : '✉️ Simple PDU Mode: Click Source device on canvas'
+            }
+          </span>
+          <button
+            onClick={() => setPduSourceNode(null)}
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: '#fff',
+              borderRadius: 4,
+              padding: '2px 8px',
+              cursor: 'pointer',
+              fontSize: 11
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Main Zoomed & Panned Canvas Layer */}
       <div
         style={{
@@ -1721,7 +1771,84 @@ export const Canvas: React.FC = () => {
               );
             }
 
-            // 4. DATA PACKET PARTICLE (Ethernet Frame / Laser Photon Pulse)
+            // 4. DATA PACKET PARTICLE (Ethernet Frame / Laser Photon Pulse / Cisco Packet Tracer Envelope)
+            if (pkt.isEnvelope) {
+              const envColor = pkt.color || (pkt.protocol === 'ICMP' ? '#a855f7' : '#10b981');
+              return (
+                <g 
+                  key={pkt.id} 
+                  transform={`translate(${px}, ${py})`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (pkt.pdu) openPduModal(pkt.pdu);
+                  }}
+                >
+                  {/* Glow Shadow */}
+                  <rect
+                    x={-15}
+                    y={-11}
+                    width={30}
+                    height={22}
+                    rx={3}
+                    fill={envColor}
+                    opacity={0.4}
+                    filter="blur(3px)"
+                  />
+                  {/* Envelope Base Body */}
+                  <rect
+                    x={-13}
+                    y={-9}
+                    width={26}
+                    height={18}
+                    rx={2}
+                    fill="#0f172a"
+                    stroke={envColor}
+                    strokeWidth={1.8}
+                  />
+                  {/* Envelope Flap Lines */}
+                  <path
+                    d="M -13,-9 L 0,2 L 13,-9"
+                    fill="none"
+                    stroke={envColor}
+                    strokeWidth={1.4}
+                  />
+                  <path
+                    d="M -13,9 L -5,1 M 13,9 L 5,1"
+                    fill="none"
+                    stroke={envColor}
+                    strokeWidth={1.1}
+                    opacity={0.65}
+                  />
+
+                  {/* Protocol Badge on Envelope */}
+                  <g transform="translate(0, -17)">
+                    <rect
+                      x={-22}
+                      y={-8}
+                      width={44}
+                      height={15}
+                      rx={4}
+                      fill="#090d16"
+                      stroke={envColor}
+                      strokeWidth={1.2}
+                    />
+                    <text
+                      x={0}
+                      y={3}
+                      fill="#f8fafc"
+                      fontSize="8.5"
+                      fontWeight="800"
+                      fontFamily="'Inter', monospace"
+                      textAnchor="middle"
+                    >
+                      {pkt.protocol || 'ICMP'}
+                    </text>
+                  </g>
+                </g>
+              );
+            }
+
             return (
               <g key={pkt.id} transform={`translate(${px}, ${py})`}>
                 {/* Glowing Laser Photon Bead */}
@@ -1769,6 +1896,24 @@ export const Canvas: React.FC = () => {
               key={node.id}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isAddingPdu) {
+                  if (!pduSourceNodeId) {
+                    setPduSourceNode(node.id);
+                    message.info(`✉️ Source device: ${node.tag}. Now click the destination device.`);
+                    return;
+                  } else if (pduSourceNodeId === node.id) {
+                    message.warning('Destination device cannot be the same as the source.');
+                    return;
+                  } else {
+                    const ok = dispatchSimplePdu(pduSourceNodeId, node.id);
+                    if (ok) {
+                      message.success(`✉️ Simple PDU dispatched: ${graph.nodes[pduSourceNodeId]?.tag || 'Source'} ➔ ${node.tag}!`);
+                    } else {
+                      message.error(`Cannot dispatch PDU: No network path between ${graph.nodes[pduSourceNodeId]?.tag || 'Source'} and ${node.tag}.`);
+                    }
+                    return;
+                  }
+                }
                 if (pendingPort) {
                   if (pendingPort.nodeId !== node.id) {
                     const res = connectDeviceToDevice(pendingPort.nodeId, node.id);
@@ -1808,7 +1953,7 @@ export const Canvas: React.FC = () => {
                 });
               }}
               onMouseDown={(e) => {
-                if (pendingPort) return;
+                if (pendingPort || isAddingPdu) return;
                 if (e.button !== 0) return;
                 e.stopPropagation();
                 const isMulti = e.shiftKey || e.ctrlKey;
@@ -1844,7 +1989,9 @@ export const Canvas: React.FC = () => {
                 width: 210,
                 backgroundColor: isFailed || isNetMisconfigured ? '#1a0b0e' : '#0f172a',
                 borderRadius: 8,
-                border: isSelected 
+                border: pduSourceNodeId === node.id
+                  ? '2px solid #c084fc'
+                  : isSelected 
                   ? '2px solid #38bdf8' 
                   : pendingPort && pendingPort.nodeId === node.id
                   ? '2px solid #38bdf8'
@@ -1859,7 +2006,9 @@ export const Canvas: React.FC = () => {
                   : isMultiDomainNode
                   ? '1px solid #0891b2'
                   : '1px solid #334155',
-                boxShadow: isSelected 
+                boxShadow: pduSourceNodeId === node.id
+                  ? '0 0 20px rgba(192, 132, 252, 0.7)'
+                  : isSelected 
                   ? '0 0 16px rgba(56, 189, 248, 0.35)' 
                   : pendingPort && pendingPort.nodeId !== node.id
                   ? '0 0 16px rgba(6, 182, 212, 0.4)'
@@ -1870,13 +2019,38 @@ export const Canvas: React.FC = () => {
                   : isPlumbNode
                   ? '0 4px 12px rgba(6, 182, 212, 0.12)'
                   : '0 4px 10px rgba(0, 0, 0, 0.4)',
-                cursor: pendingPort 
+                cursor: isAddingPdu 
+                  ? 'crosshair'
+                  : pendingPort 
                   ? (pendingPort.nodeId === node.id ? 'default' : 'crosshair') 
                   : draggingNodeId === node.id ? 'grabbing' : 'grab',
                 userSelect: 'none',
                 transition: 'box-shadow 0.15s, border-color 0.15s'
               }}
             >
+              {/* PDU Source Badge Indicator */}
+              {pduSourceNodeId === node.id && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: -24,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#7e22ce',
+                    border: '1px solid #c084fc',
+                    color: '#ffffff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.6)',
+                    zIndex: 15
+                  }}
+                >
+                  ✉️ Source Selected
+                </div>
+              )}
               {/* Node Header */}
               <div
                 style={{

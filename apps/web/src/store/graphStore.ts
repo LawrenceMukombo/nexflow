@@ -11,7 +11,10 @@ import {
   LibraryAssembly,
   ComponentTemplate,
   ComponentPort,
-  SavedProject
+  SavedProject,
+  PduDetails,
+  SimulationEvent,
+  PacketTracerScenario
 } from '@omniflow/shared-types';
 import { 
   createComponentInstance, 
@@ -47,7 +50,9 @@ import {
   autoAssignNodeIp,
   autoConfigureAllNetworkIps,
   getSubnetOverview,
-  SubnetOverview
+  SubnetOverview,
+  createSimplePdu,
+  stepSimulationPacket
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
@@ -331,6 +336,23 @@ export interface GraphState {
   tickSimulation: () => void;
   resetSimulation: () => void;
   autoLayout: () => void;
+
+  // Cisco Packet Tracer Experience
+  networkMode: 'REALTIME' | 'SIMULATION';
+  isAddingPdu: boolean;
+  pduSourceNodeId: string | null;
+  simulationEvents: SimulationEvent[];
+  scenarios: PacketTracerScenario[];
+  selectedPdu: PduDetails | null;
+  isPduModalOpen: boolean;
+  setNetworkMode: (mode: 'REALTIME' | 'SIMULATION') => void;
+  toggleAddPduMode: (enable?: boolean) => void;
+  setPduSourceNode: (nodeId: string | null) => void;
+  dispatchSimplePdu: (sourceNodeId: string, targetNodeId: string) => boolean;
+  stepSimulationForward: () => void;
+  resetSimulationEvents: () => void;
+  openPduModal: (pdu: PduDetails) => void;
+  closePduModal: () => void;
   
   setViewport: (vp: { x: number; y: number; zoom: number }) => void;
   loadDemoTopology: () => void;
@@ -546,6 +568,15 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   simulationTick: 0,
   activePackets: [],
   telemetry: initialTelemetry,
+
+  // Cisco Packet Tracer initial state
+  networkMode: 'REALTIME',
+  isAddingPdu: false,
+  pduSourceNodeId: null,
+  simulationEvents: [],
+  scenarios: [],
+  selectedPdu: null,
+  isPduModalOpen: false,
 
   // Domain Flow Filters
   showDataFlow: true,
@@ -2291,12 +2322,88 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     set(state => ({ activePackets: [...state.activePackets, ...surgePackets] }));
   },
 
+  // Cisco Packet Tracer Actions
+  setNetworkMode: (mode) => set({ networkMode: mode, isSimulating: mode === 'REALTIME' }),
+
+  toggleAddPduMode: (enable) => set(state => ({ 
+    isAddingPdu: enable !== undefined ? enable : !state.isAddingPdu, 
+    pduSourceNodeId: null 
+  })),
+
+  setPduSourceNode: (nodeId) => set({ pduSourceNodeId: nodeId }),
+
+  dispatchSimplePdu: (sourceNodeId, targetNodeId) => {
+    const { graph } = get();
+    const result = createSimplePdu(graph, sourceNodeId, targetNodeId);
+    if (!result || !result.packet || !result.event || !result.scenario) return false;
+    const { packet, event, scenario } = result;
+
+    set(state => ({
+      activePackets: [...state.activePackets, packet],
+      simulationEvents: [event, ...state.simulationEvents].slice(0, 100),
+      scenarios: [scenario, ...state.scenarios.slice(0, 9)],
+      isAddingPdu: false,
+      pduSourceNodeId: null
+    }));
+    return true;
+  },
+
+  stepSimulationForward: () => {
+    const { graph, activePackets, simulationEvents, scenarios } = get();
+    const envelopePackets = activePackets.filter(p => p.isEnvelope);
+    const regularPackets = activePackets.filter(p => !p.isEnvelope);
+
+    if (envelopePackets.length === 0) {
+      get().tickSimulation();
+      return;
+    }
+
+    const nextEnvelopes: SimulationPacket[] = [];
+    const newEvents: SimulationEvent[] = [];
+    let updatedScenarios = [...scenarios];
+
+    for (const pkt of envelopePackets) {
+      const stepRes = stepSimulationPacket(pkt, graph);
+      if (stepRes.newEvent) {
+        newEvents.push(stepRes.newEvent);
+      }
+      if (stepRes.updatedPacket) {
+        nextEnvelopes.push(stepRes.updatedPacket);
+      }
+      if (stepRes.completedScenarioStatus) {
+        const srcNode = graph.nodes[pkt.sourceNodeId];
+        const tgtNode = graph.nodes[pkt.targetNodeId];
+        updatedScenarios = updatedScenarios.map(sc => {
+          if (sc.sourceTag === srcNode?.tag && sc.destTag === tgtNode?.tag) {
+            return { ...sc, status: stepRes.completedScenarioStatus!, roundTripMs: Math.round(Math.random() * 8 + 4) };
+          }
+          return sc;
+        });
+      }
+    }
+
+    set({
+      activePackets: [...regularPackets, ...nextEnvelopes],
+      simulationEvents: [...newEvents, ...simulationEvents].slice(0, 100),
+      scenarios: updatedScenarios
+    });
+  },
+
+  resetSimulationEvents: () => set(state => ({
+    simulationEvents: [],
+    scenarios: [],
+    activePackets: state.activePackets.filter(p => !p.isEnvelope)
+  })),
+
+  openPduModal: (pdu) => set({ selectedPdu: pdu, isPduModalOpen: true }),
+  closePduModal: () => set({ isPduModalOpen: false, selectedPdu: null }),
+
   tickSimulation: () => {
-    const { graph, simulationTick, activePackets, telemetry } = get();
+    const { graph, simulationTick, activePackets, telemetry, networkMode } = get();
     
-    // Continuously generate realistic domain flow particles across active connections
+    // In simulation mode, do not spawn continuous ambient flows
     let currentPackets = activePackets;
-    if (currentPackets.length < 24) {
+    if (networkMode === 'REALTIME' && currentPackets.length < 24) {
       currentPackets = spawnContinuousFlowPackets(graph, currentPackets);
     }
 
@@ -2306,9 +2413,30 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       telemetry
     });
 
+    let finalPackets = simState.packets;
+    if (networkMode === 'REALTIME') {
+      const envelopes = finalPackets.filter(p => p.isEnvelope);
+      if (envelopes.length > 0) {
+        const regular = finalPackets.filter(p => !p.isEnvelope);
+        const steppedEnvelopes: SimulationPacket[] = [];
+        const newEvents: SimulationEvent[] = [];
+        for (const env of envelopes) {
+          const res = stepSimulationPacket(env, graph);
+          if (res.newEvent) newEvents.push(res.newEvent);
+          if (res.updatedPacket) steppedEnvelopes.push(res.updatedPacket);
+        }
+        finalPackets = [...regular, ...steppedEnvelopes];
+        if (newEvents.length > 0) {
+          set(state => ({
+            simulationEvents: [...newEvents, ...state.simulationEvents].slice(0, 100)
+          }));
+        }
+      }
+    }
+
     set({
       simulationTick: simState.tick,
-      activePackets: simState.packets,
+      activePackets: finalPackets,
       telemetry: simState.telemetry
     });
   },

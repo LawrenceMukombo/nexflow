@@ -24,6 +24,8 @@ import { FailoverSimulationModal } from './components/FailoverSimulationModal';
 import { DigitalTwinViewerModal } from './components/DigitalTwinViewerModal';
 import { CollaborationDrawer } from './components/CollaborationDrawer';
 import { NetworkIpamModal } from './components/NetworkIpamModal';
+import { PacketTracerSimulationBar } from './components/PacketTracerSimulationBar';
+import { PduInspectorModal } from './components/PduInspectorModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -90,6 +92,7 @@ export const App: React.FC = () => {
           <Palette />
           <div style={{ flex: 1, position: 'relative', height: '100%' }}>
             <Canvas />
+            <PacketTracerSimulationBar />
           </div>
           <Inspector />
         </div>
@@ -116,6 +119,7 @@ export const App: React.FC = () => {
         <DigitalTwinViewerModal />
         <CollaborationDrawer />
         <NetworkIpamModal />
+        <PduInspectorModal />
       </div>
     </ConfigProvider>
     </>
