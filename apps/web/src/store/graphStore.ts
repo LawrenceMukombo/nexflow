@@ -33,7 +33,11 @@ import {
   validateLibraryJson,
   exportLibraryToJson,
   registerLibraryComponents,
-  NETWORK_COMPONENT_CATALOG
+  NETWORK_COMPONENT_CATALOG,
+  FailoverTelemetry,
+  FailoverScenarioId,
+  createInitialFailoverTelemetry,
+  stepFailoverSimulation
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
@@ -147,6 +151,8 @@ export interface GraphState {
   isVersionDiffModalOpen: boolean;
   isExportCenterModalOpen: boolean;
   isAnalyticsModalOpen: boolean;
+  isFailoverModalOpen: boolean;
+  failoverTelemetry: FailoverTelemetry;
   engineeringStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED';
   designRevisions: DesignRevision[];
 
@@ -260,6 +266,12 @@ export interface GraphState {
   openAnalyticsModal: () => void;
   closeAnalyticsModal: () => void;
   toggleAnalyticsModal: (open?: boolean) => void;
+  openFailoverModal: () => void;
+  closeFailoverModal: () => void;
+  selectFailoverScenario: (scenarioId: FailoverScenarioId) => void;
+  toggleFailoverSimulation: (running?: boolean) => void;
+  stepFailoverTick: (dtSec?: number) => void;
+  resetFailoverSimulation: () => void;
   setEngineeringStatus: (status: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED') => void;
   createDesignRevision: (version: string, summary: string, author?: string) => void;
   revertToRevision: (revisionId: string) => void;
@@ -448,6 +460,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isVersionDiffModalOpen: false,
   isExportCenterModalOpen: false,
   isAnalyticsModalOpen: false,
+  isFailoverModalOpen: false,
+  failoverTelemetry: createInitialFailoverTelemetry('GRID_OUTAGE_ATS_FAILOVER'),
   engineeringStatus: 'DRAFT',
   designRevisions: [
     {
@@ -1900,6 +1914,42 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   openAnalyticsModal: () => set({ isAnalyticsModalOpen: true }),
   closeAnalyticsModal: () => set({ isAnalyticsModalOpen: false }),
   toggleAnalyticsModal: (open) => set((state) => ({ isAnalyticsModalOpen: open !== undefined ? open : !state.isAnalyticsModalOpen })),
+  openFailoverModal: () => set({ isFailoverModalOpen: true }),
+  closeFailoverModal: () => set((state) => ({ 
+    isFailoverModalOpen: false, 
+    failoverTelemetry: { ...state.failoverTelemetry, isRunning: false } 
+  })),
+  selectFailoverScenario: (scenarioId) => set({
+    failoverTelemetry: createInitialFailoverTelemetry(scenarioId)
+  }),
+  toggleFailoverSimulation: (running) => set((state) => ({
+    failoverTelemetry: {
+      ...state.failoverTelemetry,
+      isRunning: running !== undefined ? running : !state.failoverTelemetry.isRunning
+    }
+  })),
+  stepFailoverTick: (dtSec = 1.0) => {
+    const { graph, failoverTelemetry } = get();
+    const { telemetry: nextTel, graphUpdated } = stepFailoverSimulation(graph, failoverTelemetry, dtSec);
+    if (graphUpdated) {
+      set({ failoverTelemetry: nextTel, graph: { ...graph } });
+    } else {
+      set({ failoverTelemetry: nextTel });
+    }
+  },
+  resetFailoverSimulation: () => {
+    const { graph, failoverTelemetry } = get();
+    for (const node of Object.values(graph.nodes)) {
+      node.simulationState.isFailed = false;
+    }
+    for (const conn of Object.values(graph.connections)) {
+      conn.simulationState.isFailed = false;
+    }
+    set({
+      graph: { ...graph },
+      failoverTelemetry: createInitialFailoverTelemetry(failoverTelemetry.scenarioId)
+    });
+  },
   setEngineeringStatus: (status) => set({ engineeringStatus: status }),
   createDesignRevision: (version, summary, author = 'Design Engineer') => {
     const { graph, designRevisions } = get();

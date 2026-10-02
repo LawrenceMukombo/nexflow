@@ -20,6 +20,7 @@ import { VersionDiffModal } from './components/VersionDiffModal';
 import { ExportCenterModal } from './components/ExportCenterModal';
 import { DeviceCliModal } from './components/DeviceCliModal';
 import { EngineeringAnalyticsModal } from './components/EngineeringAnalyticsModal';
+import { FailoverSimulationModal } from './components/FailoverSimulationModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -108,6 +109,7 @@ export const App: React.FC = () => {
         <ExportCenterModal />
         <DeviceCliModal />
         <EngineeringAnalyticsModal />
+        <FailoverSimulationModal />
       </div>
     </ConfigProvider>
     </>

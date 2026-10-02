@@ -14,7 +14,8 @@ import {
   FilePdfOutlined,
   HistoryOutlined,
   ExportOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  AlertOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -39,6 +40,7 @@ export const TopNav: React.FC = () => {
     openDesignReportModal,
     openVersionDiffModal,
     openExportCenterModal,
+    openFailoverModal,
     engineeringStatus,
     setEngineeringStatus,
     currentProjectName,
@@ -205,6 +207,16 @@ export const TopNav: React.FC = () => {
           Analytics &amp; KPI
         </Button>
 
+        {/* Disaster Recovery & Failover Simulator */}
+        <Button
+          icon={<AlertOutlined style={{ color: '#ef4444' }} />}
+          size="small"
+          onClick={openFailoverModal}
+          style={{ backgroundColor: '#1e293b', borderColor: '#ef4444', color: '#f8fafc', fontSize: 12, fontWeight: 600 }}
+        >
+          Failover Lab
+        </Button>
+
         {/* Documentation & Reports Dropdown */}
         <Dropdown
           menu={{
@@ -214,6 +226,12 @@ export const TopNav: React.FC = () => {
                 icon: <BarChartOutlined style={{ color: '#38bdf8' }} />,
                 label: 'Analytics & KPI Dashboard',
                 onClick: openAnalyticsModal
+              },
+              {
+                key: 'doc-failover',
+                icon: <AlertOutlined style={{ color: '#ef4444' }} />,
+                label: 'Disaster Recovery & Failover Simulator',
+                onClick: openFailoverModal
               },
               { type: 'divider' },
               {

@@ -35,7 +35,8 @@ import {
   ExportOutlined,
   BookOutlined,
   CodeOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  AlertOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -89,6 +90,7 @@ export const EnterpriseMenuBar: React.FC = () => {
     openVersionDiffModal,
     openExportCenterModal,
     openAnalyticsModal,
+    openFailoverModal,
     toggleValidationDrawer,
     validationIssues,
     openCliModal
@@ -549,6 +551,12 @@ export const EnterpriseMenuBar: React.FC = () => {
       icon: <BarChartOutlined style={{ color: '#38bdf8' }} />,
       label: 'Analytics & Telemetry Dashboard (KPI)...',
       onClick: openAnalyticsModal
+    },
+    {
+      key: 'tool-failover',
+      icon: <AlertOutlined style={{ color: '#ef4444' }} />,
+      label: 'Disaster Recovery & Failover Simulator...',
+      onClick: openFailoverModal
     },
     { type: 'divider' },
     {
