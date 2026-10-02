@@ -22,7 +22,13 @@ import {
   ClearOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
-import { CABLE_CATALOG, checkNodeNetworkConfig } from '@omniflow/network-engine';
+import { 
+  CABLE_CATALOG, 
+  checkNodeNetworkConfig,
+  solveElectricalNetwork,
+  solveHydraulicNetwork,
+  solveSolarNetwork
+} from '@omniflow/network-engine';
 import { executeCliCommand } from '../utils/cliNetworkEngine';
 import { ComponentIcon } from './ComponentIcon';
 
@@ -51,6 +57,19 @@ export const Inspector: React.FC = () => {
 
   const selectedNode = selectedNodeId ? graph.nodes[selectedNodeId] : null;
   const selectedConn = selectedConnectionId ? graph.connections[selectedConnectionId] : null;
+
+  // Multi-Domain Engineering Physics Solvers
+  const elecSol = React.useMemo(() => {
+    try { return solveElectricalNetwork(graph); } catch { return null; }
+  }, [graph]);
+
+  const hydSol = React.useMemo(() => {
+    try { return solveHydraulicNetwork(graph); } catch { return null; }
+  }, [graph]);
+
+  const solSol = React.useMemo(() => {
+    try { return solveSolarNetwork(graph); } catch { return null; }
+  }, [graph]);
 
   if (!selectedNode && !selectedConn) {
     return (
@@ -85,6 +104,12 @@ export const Inspector: React.FC = () => {
     const isFailed = selectedConn.simulationState.isFailed;
     const cableSpec = CABLE_CATALOG[selectedConn.connectionType] || CABLE_CATALOG.CAT6;
 
+    const isElecConn = selectedConn.domain === 'ELECTRICAL' || selectedConn.domain === 'SOLAR' || selectedConn.connectionType.toUpperCase().includes('POWER') || selectedConn.connectionType.toUpperCase().includes('AC_') || selectedConn.connectionType.toUpperCase().includes('DC_');
+    const isHydConn = selectedConn.domain === 'PLUMBING' || selectedConn.connectionType.toUpperCase().includes('PIPE') || selectedConn.connectionType.toUpperCase().includes('WATER') || selectedConn.connectionType.toUpperCase().includes('CHILLED');
+
+    const elecCable = elecSol?.cableResults[selectedConn.id];
+    const hydPipe = hydSol?.pipeResults[selectedConn.id];
+
     return (
       <div
         style={{
@@ -100,7 +125,7 @@ export const Inspector: React.FC = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Title level={5} style={{ color: '#f8fafc', margin: 0 }}>
-            Cable Connection
+            {isElecConn ? '⚡ Electrical Feeder' : isHydConn ? '💧 Hydraulic Pipe Run' : '🌐 Cable Connection'}
           </Title>
           <Tag color={isFailed ? 'error' : 'cyan'}>
             {isFailed ? 'SEVERED / FAULT' : 'ACTIVE LINK'}
@@ -162,6 +187,120 @@ export const Inspector: React.FC = () => {
               addonAfter="meters"
             />
           </div>
+
+          {/* ⚡ REAL ELECTRICAL PHYSICS BREAKDOWN */}
+          {isElecConn && elecCable && (
+            <div style={{
+              backgroundColor: '#090d16',
+              border: `1px solid ${elecCable.necCompliance.status === 'VIOLATION_CRITICAL' ? '#ef4444' : elecCable.necCompliance.status === 'WARNING_HIGH_DROP' ? '#f59e0b' : '#334155'}`,
+              borderRadius: 6,
+              padding: 10
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#eab308' }}>
+                  ⚡ VOLTAGE DROP &amp; LOAD FLOW
+                </span>
+                <Tag color={elecCable.necCompliance.status === 'VIOLATION_CRITICAL' ? 'error' : elecCable.necCompliance.status === 'WARNING_HIGH_DROP' ? 'warning' : 'success'} style={{ margin: 0, fontSize: 10 }}>
+                  {elecCable.necCompliance.status === 'VIOLATION_CRITICAL' ? 'NEC VIOLATION (>5%)' : elecCable.necCompliance.status === 'WARNING_HIGH_DROP' ? 'HIGH DROP (>3%)' : 'NEC COMPLIANT'}
+                </Tag>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                <div>
+                  <span style={{ color: '#64748b' }}>System:</span>{' '}
+                  <span style={{ color: '#f8fafc', fontWeight: 600 }}>{elecCable.nominalVoltage}V {elecCable.phaseSystem.includes('3PHASE') ? '3Φ' : '1Φ'}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Conductor:</span>{' '}
+                  <span style={{ color: '#f8fafc', fontWeight: 600 }}>{elecCable.conductorSpec.crossSectionMm2}mm²</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Current:</span>{' '}
+                  <span style={{ color: '#38bdf8', fontWeight: 600 }}>{elecCable.loadCurrentAmps} A</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Power:</span>{' '}
+                  <span style={{ color: '#38bdf8', fontWeight: 600 }}>{(elecCable.activePowerWatts / 1000).toFixed(1)} kW</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Voltage Drop:</span>{' '}
+                  <span style={{ color: elecCable.voltageDropPercent > 3 ? '#ef4444' : '#10b981', fontWeight: 700 }}>
+                    {elecCable.voltageDropVolts}V ({elecCable.voltageDropPercent}%)
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Receiving V:</span>{' '}
+                  <span style={{ color: '#f8fafc', fontWeight: 600 }}>{elecCable.receivingVoltage} V</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Resistance R:</span>{' '}
+                  <span style={{ color: '#cbd5e1', fontFamily: 'monospace' }}>{elecCable.resistanceOhm} Ω</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Reactance X:</span>{' '}
+                  <span style={{ color: '#cbd5e1', fontFamily: 'monospace' }}>{elecCable.reactanceOhm} Ω</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 💧 REAL HYDRAULIC & CHILLED WATER FRICTION BREAKDOWN */}
+          {isHydConn && hydPipe && (
+            <div style={{
+              backgroundColor: '#090d16',
+              border: `1px solid ${hydPipe.pressureDropPsi > 15 ? '#ef4444' : '#334155'}`,
+              borderRadius: 6,
+              padding: 10
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8' }}>
+                  💧 DARCY-WEISBACH PIPE FLOW
+                </span>
+                <Tag color={hydPipe.ashraeVelocityCompliance.status === 'CRITICAL_EROSION_RISK' ? 'error' : hydPipe.ashraeVelocityCompliance.status === 'OPTIMAL' ? 'success' : 'cyan'} style={{ margin: 0, fontSize: 10 }}>
+                  {hydPipe.ashraeVelocityCompliance.status === 'OPTIMAL' ? 'ASHRAE OPTIMAL' : hydPipe.ashraeVelocityCompliance.status}
+                </Tag>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                <div>
+                  <span style={{ color: '#64748b' }}>Pipe Size:</span>{' '}
+                  <span style={{ color: '#f8fafc', fontWeight: 600 }}>{hydPipe.nominalSize}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Flow Rate:</span>{' '}
+                  <span style={{ color: '#38bdf8', fontWeight: 600 }}>{hydPipe.flowRateLps} L/s</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Velocity:</span>{' '}
+                  <span style={{ color: hydPipe.velocityMPerS > 2.5 ? '#ef4444' : '#38bdf8', fontWeight: 600 }}>
+                    {hydPipe.velocityMPerS} m/s
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Pressure Drop:</span>{' '}
+                  <span style={{ color: hydPipe.pressureDropPsi > 15 ? '#ef4444' : '#10b981', fontWeight: 700 }}>
+                    {hydPipe.pressureDropPsi} PSI ({hydPipe.pressureDropBar} bar)
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Head Loss:</span>{' '}
+                  <span style={{ color: '#cbd5e1' }}>{hydPipe.totalHeadLossMeters} m head</span>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Friction f:</span>{' '}
+                  <span style={{ color: '#cbd5e1', fontFamily: 'monospace' }}>{hydPipe.frictionFactor}</span>
+                </div>
+                {hydPipe.thermalCapacityKw && (
+                  <div style={{ gridColumn: 'span 2', borderTop: '1px solid #1e293b', paddingTop: 4 }}>
+                    <span style={{ color: '#64748b' }}>Thermal Capacity (7°C ΔT):</span>{' '}
+                    <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                      {hydPipe.thermalCapacityKw} kW ({hydPipe.coolingTonsRefrigeration} TR)
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div style={{ padding: 10, backgroundColor: '#090d16', borderRadius: 6, display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, color: '#94a3b8' }}>Physics Latency:</span>
@@ -617,6 +756,196 @@ export const Inspector: React.FC = () => {
                       style={{ width: '100%' }}
                       addonAfter="Watts"
                     />
+                  </div>
+                )}
+              </div>
+            )
+          },
+          {
+            key: 'physics',
+            label: 'Engineering Physics',
+            children: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* 1. Electrical Load Flow & Protection Card */}
+                {elecSol && elecSol.nodeResults[selectedNode!.id] && (
+                  <div style={{ padding: 10, backgroundColor: '#090d16', border: '1px solid #334155', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#eab308' }}>
+                        ⚡ ELECTRICAL LOAD FLOW
+                      </span>
+                      <Tag color={elecSol.nodeResults[selectedNode!.id].totalVoltageDropPercent > 3 ? 'warning' : 'success'} style={{ margin: 0, fontSize: 10 }}>
+                        {elecSol.nodeResults[selectedNode!.id].totalVoltageDropPercent > 3 ? 'HIGH VOLTAGE DROP' : 'POWER OK'}
+                      </Tag>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Connected Load:</span>{' '}
+                        <span style={{ color: '#f8fafc', fontWeight: 600 }}>{(elecSol.nodeResults[selectedNode!.id].connectedLoadWatts / 1000).toFixed(1)} kW</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Operating Load:</span>{' '}
+                        <span style={{ color: '#38bdf8', fontWeight: 600 }}>{(elecSol.nodeResults[selectedNode!.id].operatingLoadWatts / 1000).toFixed(1)} kW</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Operating Current:</span>{' '}
+                        <span style={{ color: '#f8fafc', fontWeight: 600 }}>{elecSol.nodeResults[selectedNode!.id].operatingCurrentAmps} A</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Power Factor:</span>{' '}
+                        <span style={{ color: '#f8fafc' }}>{elecSol.nodeResults[selectedNode!.id].powerFactor}</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Incoming Voltage:</span>{' '}
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>{elecSol.nodeResults[selectedNode!.id].incomingVoltage} V</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Drop from Source:</span>{' '}
+                        <span style={{ color: elecSol.nodeResults[selectedNode!.id].totalVoltageDropPercent > 3 ? '#ef4444' : '#10b981', fontWeight: 600 }}>
+                          {elecSol.nodeResults[selectedNode!.id].totalVoltageDropPercent}%
+                        </span>
+                      </div>
+                      {elecSol.nodeResults[selectedNode!.id].ratedBreakerAmps && (
+                        <div style={{ gridColumn: 'span 2', borderTop: '1px solid #1e293b', paddingTop: 6 }}>
+                          <span style={{ color: '#64748b' }}>Circuit Breaker:</span>{' '}
+                          <span style={{ color: elecSol.nodeResults[selectedNode!.id].isBreakerTripped ? '#ef4444' : '#f8fafc', fontWeight: 600 }}>
+                            {elecSol.nodeResults[selectedNode!.id].ratedBreakerAmps}A ({elecSol.nodeResults[selectedNode!.id].breakerLoadingPercent}% loaded)
+                          </span>{' '}
+                          {elecSol.nodeResults[selectedNode!.id].isBreakerTripped && <Tag color="error">TRIPPED</Tag>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Hydraulic Pressure & Cooling Card */}
+                {hydSol && hydSol.nodeResults[selectedNode!.id] && (
+                  <div style={{ padding: 10, backgroundColor: '#090d16', border: '1px solid #334155', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#38bdf8' }}>
+                        💧 HYDRAULIC PRESSURE &amp; FLOW
+                      </span>
+                      <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>
+                        {hydSol.nodeResults[selectedNode!.id].incomingPressurePsi} PSI
+                      </Tag>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Inlet Pressure:</span>{' '}
+                        <span style={{ color: '#f8fafc', fontWeight: 600 }}>{hydSol.nodeResults[selectedNode!.id].incomingPressurePsi} PSI</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Bar Equivalent:</span>{' '}
+                        <span style={{ color: '#f8fafc' }}>{hydSol.nodeResults[selectedNode!.id].incomingPressureBar} bar</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Flow Demand:</span>{' '}
+                        <span style={{ color: '#38bdf8', fontWeight: 600 }}>{hydSol.nodeResults[selectedNode!.id].flowRateDemandLps} L/s</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>GPM Flow:</span>{' '}
+                        <span style={{ color: '#38bdf8' }}>{(hydSol.nodeResults[selectedNode!.id].flowRateDemandLps * 15.8503).toFixed(1)} GPM</span>
+                      </div>
+                      {hydSol.nodeResults[selectedNode!.id].chilledWaterThermalLoadKw && (
+                        <div style={{ gridColumn: 'span 2', borderTop: '1px solid #1e293b', paddingTop: 6 }}>
+                          <span style={{ color: '#64748b' }}>Cooling Capacity:</span>{' '}
+                          <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                            {hydSol.nodeResults[selectedNode!.id].chilledWaterThermalLoadKw} kW ({hydSol.nodeResults[selectedNode!.id].chilledWaterTonsRefrig} TR)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. Solar Photovoltaic String Card */}
+                {solSol && solSol.strings[selectedNode!.id] && (
+                  <div style={{ padding: 10, backgroundColor: '#090d16', border: '1px solid #334155', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>
+                        ☀️ PHOTOVOLTAIC STRING YIELD
+                      </span>
+                      <Tag color="success" style={{ margin: 0, fontSize: 10 }}>
+                        {solSol.strings[selectedNode!.id].totalPeakDcPowerKw} kWp
+                      </Tag>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Array Size:</span>{' '}
+                        <span style={{ color: '#f8fafc', fontWeight: 600 }}>
+                          {solSol.strings[selectedNode!.id].modulesInSeries}S × {solSol.strings[selectedNode!.id].parallelStrings}P ({solSol.strings[selectedNode!.id].totalModules} Mod)
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Peak DC:</span>{' '}
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>{solSol.strings[selectedNode!.id].totalPeakDcPowerKw} kWp</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Max Voc (-10°C):</span>{' '}
+                        <span style={{ color: solSol.strings[selectedNode!.id].coldVocMaxVolts > 1000 ? '#ef4444' : '#f8fafc', fontWeight: 600 }}>
+                          {solSol.strings[selectedNode!.id].coldVocMaxVolts} V
+                        </span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Min Vmp (70°C):</span>{' '}
+                        <span style={{ color: '#f8fafc' }}>{solSol.strings[selectedNode!.id].hotVmpMinVolts} V</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Daily Energy:</span>{' '}
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>{solSol.strings[selectedNode!.id].dailyYieldKwh} kWh/day</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Annual Energy:</span>{' '}
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>{solSol.strings[selectedNode!.id].annualYieldMwh} MWh/yr</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2', borderTop: '1px solid #1e293b', paddingTop: 6 }}>
+                        <span style={{ color: '#64748b' }}>CO₂ Emissions Avoided:</span>{' '}
+                        <span style={{ color: '#38bdf8', fontWeight: 700 }}>
+                          {solSol.strings[selectedNode!.id].avoidedCo2TonsPerYear} Tons CO₂/year
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Battery Energy Storage System (BESS) Card */}
+                {solSol && solSol.batteries[selectedNode!.id] && (
+                  <div style={{ padding: 10, backgroundColor: '#090d16', border: '1px solid #334155', borderRadius: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b' }}>
+                        🔋 BESS ENERGY STORAGE
+                      </span>
+                      <Tag color={solSol.batteries[selectedNode!.id].isSufficientAutonomy ? 'success' : 'warning'} style={{ margin: 0, fontSize: 10 }}>
+                        {solSol.batteries[selectedNode!.id].autonomyHours}h AUTONOMY
+                      </Tag>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Capacity:</span>{' '}
+                        <span style={{ color: '#f8fafc', fontWeight: 600 }}>{solSol.batteries[selectedNode!.id].nominalCapacityKwh} kWh</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>State of Charge:</span>{' '}
+                        <span style={{ color: '#10b981', fontWeight: 700 }}>{solSol.batteries[selectedNode!.id].currentSocPct}%</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Stored Energy:</span>{' '}
+                        <span style={{ color: '#f8fafc' }}>{solSol.batteries[selectedNode!.id].storedEnergyKwh} kWh</span>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Discharge C-Rate:</span>{' '}
+                        <span style={{ color: '#f8fafc' }}>{solSol.batteries[selectedNode!.id].currentCRate} C</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2', borderTop: '1px solid #1e293b', paddingTop: 6 }}>
+                        <span style={{ color: '#64748b' }}>Backup Autonomy (Load: {solSol.batteries[selectedNode!.id].connectedLoadKw}kW):</span>{' '}
+                        <span style={{ color: solSol.batteries[selectedNode!.id].isSufficientAutonomy ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
+                          {solSol.batteries[selectedNode!.id].autonomyHours} Hours
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

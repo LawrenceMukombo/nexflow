@@ -1447,37 +1447,59 @@ export const Canvas: React.FC = () => {
                 <circle cx={end.x} cy={end.y} r={isFluid ? 7.5 : 6} fill="#090d16" stroke={cableColor} strokeWidth={2} />
                 <circle cx={end.x} cy={end.y} r={isFluid ? 4 : 2.5} fill={isElectrical ? '#facc15' : isFluid ? '#38bdf8' : '#ffffff'} />
 
-                {/* 7. High-Visibility Cable Specification Badge Pill */}
-                <g transform={`translate(${midX}, ${midY - 12})`}>
-                  <rect
-                    x={isIpBlocked ? -75 : -60}
-                    y={-11}
-                    width={isIpBlocked ? 150 : 120}
-                    height={22}
-                    rx={11}
-                    fill="#080d19"
-                    stroke={isSelected ? '#38bdf8' : cableColor}
-                    strokeWidth={isSelected ? 2 : 1.4}
-                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.7))"
-                  />
-                  <text
-                    x={0}
-                    y={4}
-                    fill={isIpBlocked ? '#fca5a5' : isSelected ? '#38bdf8' : '#f8fafc'}
-                    fontSize="10"
-                    fontWeight="700"
-                    fontFamily="'Consolas', 'Segoe UI', monospace"
-                    letterSpacing="0.2px"
-                    textAnchor="middle"
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
-                  >
-                    {isIpBlocked ? (
-                      '⛔ LINK DOWN (WRONG IP)'
-                    ) : (
-                      `${isElectrical ? '⚡ ' : isFluid ? '💧 ' : isVideo ? '📹 ' : '🌐 '}${conn.connectionType.replace('POWER_', '').replace('PIPE_', '')} • ${conn.lengthMeters}m`
-                    )}
-                  </text>
-                </g>
+                {/* 7. High-Visibility Cable Specification Badge Pill with Live Physics */}
+                {(() => {
+                  let badgeText = `${conn.connectionType} • ${conn.lengthMeters}m`;
+                  let badgeIcon = '🌐 ';
+                  if (isIpBlocked) {
+                    badgeText = '⛔ LINK DOWN (WRONG IP)';
+                  } else if (isElectrical) {
+                    badgeIcon = '⚡ ';
+                    const vDrop = conn.simulationState.voltageDrop;
+                    const vDropText = vDrop !== undefined ? ` • ΔV: ${vDrop}V` : '';
+                    badgeText = `${badgeIcon}${conn.connectionType.replace('POWER_', '').replace('FEEDER_', '')} • ${conn.lengthMeters}m${vDropText}`;
+                  } else if (isFluid) {
+                    badgeIcon = '💧 ';
+                    const flow = conn.simulationState.flowRate;
+                    const flowText = flow !== undefined ? ` • ${flow}L/s` : '';
+                    badgeText = `${badgeIcon}${conn.connectionType.replace('PIPE_', '').replace('CHILLED_', '')} • ${conn.lengthMeters}m${flowText}`;
+                  } else if (isVideo) {
+                    badgeText = `📹 ${conn.connectionType} • ${conn.lengthMeters}m (4K)`;
+                  } else {
+                    badgeText = `🌐 ${conn.connectionType} • ${conn.lengthMeters}m (${(conn.lengthMeters * 0.005).toFixed(2)}ms)`;
+                  }
+
+                  const badgeWidth = Math.max(110, badgeText.length * 6.8);
+
+                  return (
+                    <g transform={`translate(${midX}, ${midY - 12})`}>
+                      <rect
+                        x={-badgeWidth / 2}
+                        y={-11}
+                        width={badgeWidth}
+                        height={22}
+                        rx={11}
+                        fill="#080d19"
+                        stroke={isSelected ? '#38bdf8' : isIpBlocked ? '#ef4444' : cableColor}
+                        strokeWidth={isSelected ? 2 : 1.4}
+                        filter="drop-shadow(0 2px 5px rgba(0,0,0,0.7))"
+                      />
+                      <text
+                        x={0}
+                        y={4}
+                        fill={isIpBlocked ? '#fca5a5' : isSelected ? '#38bdf8' : '#f8fafc'}
+                        fontSize="10"
+                        fontWeight="700"
+                        fontFamily="'Consolas', 'Segoe UI', monospace"
+                        letterSpacing="0.2px"
+                        textAnchor="middle"
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      >
+                        {badgeText}
+                      </text>
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}

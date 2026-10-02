@@ -1,4 +1,7 @@
 import { EngineeringGraph, EngineeringComponent, ValidationIssue } from '@omniflow/shared-types';
+import { solveElectricalNetwork } from './solvers/electricalSolver';
+import { solveHydraulicNetwork } from './solvers/hydraulicSolver';
+import { solveSolarNetwork } from './solvers/solarSolver';
 
 /**
  * Validate IPv4 dot-decimal syntax
@@ -387,6 +390,63 @@ export function validateNetworkGraph(graph: EngineeringGraph): ValidationIssue[]
         suggestedFix: 'Connect device ports to an access switch or router.'
       });
     }
+  }
+
+  // 6. Real Electrical Load Flow & Voltage Drop Physics Solver Checks (NEC / IEC 60364)
+  try {
+    const elecSol = solveElectricalNetwork(graph);
+    for (const v of elecSol.violations) {
+      issues.push({
+        id: `val_${v.code}_${v.affectedConnectionIds[0] || v.affectedNodeIds[0] || 'elec'}`,
+        severity: v.severity,
+        ruleCode: v.code,
+        title: v.title,
+        message: v.message,
+        affectedNodeIds: v.affectedNodeIds,
+        affectedConnectionIds: v.affectedConnectionIds,
+        suggestedFix: v.suggestedFix
+      });
+    }
+  } catch {
+    // Non-critical if non-electrical domain
+  }
+
+  // 7. Real Hydraulic Darcy-Weisbach & Pressure Drop Solver Checks (ASHRAE / Crane 410)
+  try {
+    const hydSol = solveHydraulicNetwork(graph);
+    for (const v of hydSol.violations) {
+      issues.push({
+        id: `val_${v.code}_${v.affectedConnectionIds[0] || v.affectedNodeIds[0] || 'hyd'}`,
+        severity: v.severity,
+        ruleCode: v.code,
+        title: v.title,
+        message: v.message,
+        affectedNodeIds: v.affectedNodeIds,
+        affectedConnectionIds: v.affectedConnectionIds,
+        suggestedFix: v.suggestedFix
+      });
+    }
+  } catch {
+    // Non-critical if non-hydraulic domain
+  }
+
+  // 8. Real Solar PV String Sizing & BESS Storage Solver Checks (STC / NOCT)
+  try {
+    const solSol = solveSolarNetwork(graph);
+    for (const v of solSol.violations) {
+      issues.push({
+        id: `val_${v.code}_${v.affectedNodeIds[0] || 'sol'}`,
+        severity: v.severity,
+        ruleCode: v.code,
+        title: v.title,
+        message: v.message,
+        affectedNodeIds: v.affectedNodeIds,
+        affectedConnectionIds: v.affectedConnectionIds,
+        suggestedFix: v.suggestedFix
+      });
+    }
+  } catch {
+    // Non-critical if non-solar domain
   }
 
   return issues;

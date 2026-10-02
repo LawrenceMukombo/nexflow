@@ -6,6 +6,9 @@ import {
   FlowMedium
 } from '@omniflow/shared-types';
 import { checkNodeNetworkConfig } from './validation';
+import { solveElectricalNetwork } from './solvers/electricalSolver';
+import { solveHydraulicNetwork } from './solvers/hydraulicSolver';
+import { solveSolarNetwork } from './solvers/solarSolver';
 
 export interface RouteHop {
   nodeId: string;
@@ -324,17 +327,56 @@ export function stepNetworkSimulation(
     conn.simulationState.isCongested = saturation > 75;
   }
 
+  // Solve genuine multi-domain physics for telemetry metrics
+  let realPowerWatts = totalPowerWatts;
+  let realCurrentAmps = 0;
+  let realFluidFlowRate = totalFluidFlowRate;
+  let realPressurePsi = 0;
+
+  try {
+    const elecSol = solveElectricalNetwork(graph);
+    if (elecSol.totalOperatingLoadWatts > 0) {
+      realPowerWatts = elecSol.totalOperatingLoadWatts;
+      realCurrentAmps = elecSol.totalOperatingCurrentAmps;
+    }
+  } catch {
+    // Electrical solver fallback
+  }
+
+  try {
+    const hydSol = solveHydraulicNetwork(graph);
+    if (hydSol.totalCirculationFlowLps > 0) {
+      realFluidFlowRate = hydSol.totalCirculationFlowLps;
+      const pressures = Object.values(hydSol.nodeResults).map(n => n.incomingPressurePsi);
+      if (pressures.length > 0) {
+        realPressurePsi = Number((pressures.reduce((a, b) => a + b, 0) / pressures.length).toFixed(1));
+      }
+    }
+  } catch {
+    // Hydraulic solver fallback
+  }
+
+  try {
+    const solSol = solveSolarNetwork(graph);
+    if (solSol.totalArrayDcCapacityKw > 0) {
+      // Add solar generation to real power
+      realPowerWatts += Math.round(solSol.totalArrayDcCapacityKw * 1000 * 0.85);
+    }
+  } catch {
+    // Solar solver fallback
+  }
+
   const telemetry: SimulationTelemetry = {
     tick,
     activePackets: updatedPackets.length,
     deliveredPackets: deliveredCount,
     droppedPackets: droppedCount,
-    averageLatencyMs: Number((1.2 + Math.random() * 0.3).toFixed(2)),
-    throughputMbps: Number(((deliveredCount * 0.85) + 120).toFixed(1)),
-    totalPowerWatts: totalPowerWatts > 0 ? totalPowerWatts : 42500,
-    totalCurrentAmps: Number(((totalPowerWatts > 0 ? totalPowerWatts : 42500) / 230).toFixed(1)),
-    totalFluidFlowRate: totalFluidFlowRate > 0 ? totalFluidFlowRate : 48.5,
-    averagePressurePsi: 58,
+    averageLatencyMs: Number((1.2 + (updatedPackets.length > 0 ? (updatedPackets.length * 0.05) : 0)).toFixed(2)),
+    throughputMbps: Number(((deliveredCount * 0.85) + (updatedPackets.length * 12)).toFixed(1)),
+    totalPowerWatts: realPowerWatts,
+    totalCurrentAmps: realCurrentAmps > 0 ? realCurrentAmps : (realPowerWatts > 0 ? Number((realPowerWatts / 230).toFixed(1)) : 0),
+    totalFluidFlowRate: realFluidFlowRate,
+    averagePressurePsi: realPressurePsi > 0 ? realPressurePsi : (realFluidFlowRate > 0 ? 58 : 0),
     nodeLoads: {},
     linkSaturations
   };

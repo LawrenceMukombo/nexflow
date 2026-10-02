@@ -6,3 +6,4 @@ export * from './boq';
 export * from './wizard';
 export * from './libraries';
 export * from './enterpriseCatalog';
+export * from './solvers';
