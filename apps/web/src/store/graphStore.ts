@@ -14,7 +14,10 @@ import {
   createConnectionInstance, 
   validateNetworkGraph,
   stepNetworkSimulation,
-  findShortestPath
+  findShortestPath,
+  generateWizardTopology,
+  NetworkWizardOptions,
+  CABLE_CATALOG
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
@@ -33,6 +36,7 @@ export interface GraphState {
   // Modals
   isBOQModalOpen: boolean;
   isCableScheduleOpen: boolean;
+  isWizardOpen: boolean;
   
   // Simulation
   isSimulating: boolean;
@@ -61,17 +65,22 @@ export interface GraphState {
   removeConnection: (id: string) => void;
   toggleConnectionFault: (id: string) => void;
   updateConnectionLength: (id: string, lengthMeters: number) => void;
+  updateConnectionCableType: (id: string, cableType: string) => void;
   
   validate: () => void;
   toggleValidationDrawer: (open?: boolean) => void;
   toggleBOQModal: (open?: boolean) => void;
   toggleCableScheduleModal: (open?: boolean) => void;
+  toggleWizardModal: (open?: boolean) => void;
+  applyWizardTopology: (options: NetworkWizardOptions) => void;
 
   toggleSimulation: (running?: boolean) => void;
   setSimulationSpeed: (speed: number) => void;
   triggerPacketBurst: () => void;
+  sendDirectedPing: (sourceNodeId: string, targetNodeId: string) => boolean;
   tickSimulation: () => void;
   resetSimulation: () => void;
+  autoLayout: () => void;
   
   setViewport: (vp: { x: number; y: number; zoom: number }) => void;
   loadDemoTopology: () => void;
@@ -129,6 +138,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isValidationDrawerOpen: false,
   isBOQModalOpen: false,
   isCableScheduleOpen: false,
+  isWizardOpen: false,
 
   isSimulating: false,
   simulationSpeed: 1,
@@ -445,6 +455,39 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     get().validate();
   },
 
+  updateConnectionCableType: (id, cableType) => {
+    const spec = CABLE_CATALOG[cableType] || CABLE_CATALOG.CAT6;
+    set((state) => {
+      const conn = state.graph.connections[id];
+      if (!conn) return state;
+
+      const updatedConn: EngineeringConnection = {
+        ...conn,
+        connectionType: spec.type,
+        properties: {
+          ...conn.properties,
+          bandwidthLimitMbps: spec.maxBandwidthMbps,
+          maxDistanceMeters: spec.maxDistanceMeters,
+          cableName: spec.name
+        }
+      };
+
+      const updatedGraph: EngineeringGraph = {
+        ...state.graph,
+        connections: {
+          ...state.graph.connections,
+          [id]: updatedConn
+        }
+      };
+
+      return {
+        graph: updatedGraph,
+        ...pushSnapshot({ ...state, graph: updatedGraph })
+      };
+    });
+    get().validate();
+  },
+
   validate: () => {
     const { graph } = get();
     const issues = validateNetworkGraph(graph);
@@ -466,6 +509,106 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   toggleCableScheduleModal: (open) => {
     set((state) => ({
       isCableScheduleOpen: open !== undefined ? open : !state.isCableScheduleOpen
+    }));
+  },
+
+  toggleWizardModal: (open) => {
+    set((state) => ({
+      isWizardOpen: open !== undefined ? open : !state.isWizardOpen
+    }));
+  },
+
+  applyWizardTopology: (options) => {
+    const newGraph = generateWizardTopology(options);
+    set((state) => ({
+      graph: newGraph,
+      isWizardOpen: false,
+      selectedNodeId: null,
+      selectedConnectionId: null,
+      pendingPort: null,
+      activePackets: [],
+      viewport: { x: 40, y: 40, zoom: 0.8 },
+      ...pushSnapshot({ ...state, graph: newGraph })
+    }));
+    get().validate();
+  },
+
+  sendDirectedPing: (sourceNodeId, targetNodeId) => {
+    const { graph } = get();
+    const path = findShortestPath(graph, sourceNodeId, targetNodeId);
+    if (!path || path.length === 0) return false;
+
+    const newPacket: SimulationPacket = {
+      id: `ping_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      sourceNodeId,
+      targetNodeId,
+      currentEdgeId: path[0].connectionId,
+      progressPercent: 5,
+      protocol: 'ICMP',
+      sizeBytes: 64,
+      status: 'ACTIVE',
+      color: '#06b6d4'
+    };
+
+    set((state) => ({
+      activePackets: [...state.activePackets, newPacket],
+      isSimulating: true
+    }));
+    return true;
+  },
+
+  autoLayout: () => {
+    const { graph } = get();
+    const nodes = Object.values(graph.nodes);
+    if (nodes.length === 0) return;
+
+    // Categorize nodes into 5 horizontal tiers
+    const tiers: Record<number, EngineeringComponent[]> = {
+      0: [], // WAN / ISP
+      1: [], // Firewalls / Routers
+      2: [], // Distribution / Core Switches
+      3: [], // Access Switches / Infrastructure / Racks
+      4: []  // Endpoints / Servers / Cameras / Workstations
+    };
+
+    for (const node of nodes) {
+      if (node.type === 'ISP_FEED' || node.type === 'ROUTER_CORE_BGP') {
+        tiers[0].push(node);
+      } else if (node.type.startsWith('FIREWALL') || node.type.startsWith('ROUTER')) {
+        tiers[1].push(node);
+      } else if (node.type === 'SWITCH_CORE_L3' || node.type === 'SWITCH_AGGREGATION_10G') {
+        tiers[2].push(node);
+      } else if (node.type.startsWith('SWITCH') || node.type.startsWith('RACK') || node.type.startsWith('UPS') || node.type.startsWith('PATCH')) {
+        tiers[3].push(node);
+      } else {
+        tiers[4].push(node);
+      }
+    }
+
+    const updatedNodes = { ...graph.nodes };
+    const tierX = [60, 290, 530, 770, 1050];
+
+    Object.entries(tiers).forEach(([tierStr, tierNodes]) => {
+      const tierIdx = Number(tierStr);
+      const startX = tierX[tierIdx] || 1050;
+      tierNodes.forEach((node, idx) => {
+        const y = 80 + idx * 130;
+        updatedNodes[node.id] = {
+          ...node,
+          position: { x: startX, y }
+        };
+      });
+    });
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: updatedNodes,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
     }));
   },
 

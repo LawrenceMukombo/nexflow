@@ -12,7 +12,12 @@ import {
   DatabaseOutlined, 
   PrinterOutlined, 
   PhoneOutlined,
-  PlusOutlined
+  PlusOutlined,
+  InboxOutlined,
+  VideoCameraOutlined,
+  LockOutlined,
+  ThunderboltOutlined,
+  TableOutlined
 } from '@ant-design/icons';
 import { NETWORK_COMPONENT_CATALOG } from '@omniflow/network-engine';
 import { useGraphStore } from '../store/graphStore';
@@ -26,12 +31,47 @@ export const Palette: React.FC = () => {
   const getIcon = (type: string) => {
     switch (type) {
       case 'ISP_FEED': return <CloudServerOutlined style={{ color: '#06b6d4', fontSize: 18 }} />;
-      case 'ROUTER_ENTERPRISE': return <PartitionOutlined style={{ color: '#38bdf8', fontSize: 18 }} />;
-      case 'FIREWALL_UTM': return <SafetyCertificateOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
-      case 'SWITCH_CORE_L3': return <ApartmentOutlined style={{ color: '#818cf8', fontSize: 18 }} />;
-      case 'SWITCH_POE_24': return <BranchesOutlined style={{ color: '#10b981', fontSize: 18 }} />;
-      case 'ACCESS_POINT_WIFI6': return <WifiOutlined style={{ color: '#f59e0b', fontSize: 18 }} />;
-      case 'SERVER_APP': return <DatabaseOutlined style={{ color: '#6366f1', fontSize: 18 }} />;
+      case 'ROUTER_ENTERPRISE':
+      case 'ROUTER_CORE_BGP':
+      case 'ROUTER_BRANCH':
+      case 'ROUTER_INDUSTRIAL':
+        return <PartitionOutlined style={{ color: '#38bdf8', fontSize: 18 }} />;
+      case 'FIREWALL_UTM':
+      case 'FIREWALL_HA_CLUSTER':
+      case 'FIREWALL_EDGE':
+        return <SafetyCertificateOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
+      case 'SWITCH_CORE_L3':
+      case 'SWITCH_AGGREGATION_10G':
+        return <ApartmentOutlined style={{ color: '#818cf8', fontSize: 18 }} />;
+      case 'SWITCH_POE_24':
+      case 'SWITCH_POE_48':
+      case 'SWITCH_MULTIGIG_24':
+      case 'SWITCH_DESKTOP_8P':
+      case 'SWITCH_INDUSTRIAL_DIN':
+        return <BranchesOutlined style={{ color: '#10b981', fontSize: 18 }} />;
+      case 'ACCESS_POINT_WIFI6':
+      case 'ACCESS_POINT_OUTDOOR':
+      case 'ACCESS_POINT_INWALL':
+      case 'WIRELESS_PTP_BRIDGE':
+      case 'WLC_CONTROLLER':
+        return <WifiOutlined style={{ color: '#f59e0b', fontSize: 18 }} />;
+      case 'SERVER_APP':
+      case 'STORAGE_NAS_SAN':
+        return <DatabaseOutlined style={{ color: '#6366f1', fontSize: 18 }} />;
+      case 'RACK_CABINET_42U':
+      case 'RACK_WALLMOUNT_12U':
+        return <InboxOutlined style={{ color: '#94a3b8', fontSize: 18 }} />;
+      case 'PATCH_PANEL_24P':
+      case 'FIBER_PATCH_PANEL':
+        return <TableOutlined style={{ color: '#0284c7', fontSize: 18 }} />;
+      case 'UPS_ONLINE_3KVA':
+      case 'SMART_PDU_RACK':
+        return <ThunderboltOutlined style={{ color: '#eab308', fontSize: 18 }} />;
+      case 'CCTV_CAMERA_PTZ':
+      case 'CONFERENCE_BAR':
+        return <VideoCameraOutlined style={{ color: '#f97316', fontSize: 18 }} />;
+      case 'ACCESS_CONTROL_PANEL':
+        return <LockOutlined style={{ color: '#ef4444', fontSize: 18 }} />;
       case 'WORKSTATION_PC': return <DesktopOutlined style={{ color: '#94a3b8', fontSize: 18 }} />;
       case 'IP_PHONE_VOIP': return <PhoneOutlined style={{ color: '#ec4899', fontSize: 18 }} />;
       case 'NETWORK_PRINTER': return <PrinterOutlined style={{ color: '#14b8a6', fontSize: 18 }} />;
@@ -47,10 +87,12 @@ export const Palette: React.FC = () => {
   );
 
   const categories = [
-    { key: 'CORE', label: 'Core Infrastructure', items: filteredItems.filter(i => i.category === 'CORE') },
-    { key: 'SWITCHING', label: 'Switching & Routing', items: filteredItems.filter(i => i.category === 'SWITCHING') },
-    { key: 'SECURITY', label: 'Perimeter & Security', items: filteredItems.filter(i => i.category === 'SECURITY') },
-    { key: 'ENDPOINTS', label: 'Endpoints & Clients', items: filteredItems.filter(i => i.category === 'ENDPOINTS') }
+    { key: 'CORE', label: 'Core & Routing', items: filteredItems.filter(i => i.category === 'CORE') },
+    { key: 'SWITCHING', label: 'Switching & Aggregation', items: filteredItems.filter(i => i.category === 'SWITCHING') },
+    { key: 'SECURITY', label: 'Firewalls & Perimeter', items: filteredItems.filter(i => i.category === 'SECURITY') },
+    { key: 'WIRELESS', label: 'Wireless & WiFi', items: filteredItems.filter(i => i.category === 'WIRELESS') },
+    { key: 'INFRASTRUCTURE', label: 'Racks & Infrastructure', items: filteredItems.filter(i => i.category === 'INFRASTRUCTURE') },
+    { key: 'ENDPOINTS', label: 'Endpoints, CCTV & IoT', items: filteredItems.filter(i => i.category === 'ENDPOINTS') }
   ];
 
   return (

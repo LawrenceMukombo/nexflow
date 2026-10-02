@@ -12,6 +12,16 @@ export interface CableSpecification {
 }
 
 export const CABLE_CATALOG: Record<string, CableSpecification> = {
+  CAT5E: {
+    type: 'CAT5E',
+    name: 'Category 5e UTP Cable',
+    category: 'TWISTED_PAIR',
+    maxBandwidthMbps: 1000,
+    maxDistanceMeters: 100,
+    costPerMeter: 0.85,
+    labourPerMeter: 0.65,
+    supportedPortTypes: ['RJ45']
+  },
   CAT6: {
     type: 'CAT6',
     name: 'Category 6 UTP Cable',
@@ -24,12 +34,32 @@ export const CABLE_CATALOG: Record<string, CableSpecification> = {
   },
   CAT6A: {
     type: 'CAT6A',
-    name: 'Category 6A STP 10G Cable',
+    name: 'Category 6A STP 10G Shielded',
     category: 'TWISTED_PAIR',
     maxBandwidthMbps: 10000,
     maxDistanceMeters: 100,
     costPerMeter: 2.1,
     labourPerMeter: 1.2,
+    supportedPortTypes: ['RJ45']
+  },
+  CAT7: {
+    type: 'CAT7',
+    name: 'Category 7 S/FTP Industrial 10G',
+    category: 'TWISTED_PAIR',
+    maxBandwidthMbps: 10000,
+    maxDistanceMeters: 100,
+    costPerMeter: 3.2,
+    labourPerMeter: 1.5,
+    supportedPortTypes: ['RJ45']
+  },
+  CAT8: {
+    type: 'CAT8',
+    name: 'Category 8 40G Data Center Copper',
+    category: 'TWISTED_PAIR',
+    maxBandwidthMbps: 40000,
+    maxDistanceMeters: 30,
+    costPerMeter: 4.8,
+    labourPerMeter: 1.8,
     supportedPortTypes: ['RJ45']
   },
   FIBER_SM: {
@@ -51,6 +81,46 @@ export const CABLE_CATALOG: Record<string, CableSpecification> = {
     costPerMeter: 2.8,
     labourPerMeter: 2.0,
     supportedPortTypes: ['FIBER_LC']
+  },
+  FIBER_MM_OM5: {
+    type: 'FIBER_MM_OM5',
+    name: 'Multi-Mode OM5 Wideband Fiber',
+    category: 'FIBER_OPTIC',
+    maxBandwidthMbps: 100000,
+    maxDistanceMeters: 440,
+    costPerMeter: 4.2,
+    labourPerMeter: 2.8,
+    supportedPortTypes: ['FIBER_LC']
+  },
+  DAC_10G: {
+    type: 'DAC_10G',
+    name: '10G SFP+ Direct Attach Copper (DAC)',
+    category: 'TWISTED_PAIR',
+    maxBandwidthMbps: 10000,
+    maxDistanceMeters: 7,
+    costPerMeter: 8.5,
+    labourPerMeter: 1.0,
+    supportedPortTypes: ['FIBER_LC', 'SFP_PLUS']
+  },
+  DAC_25G: {
+    type: 'DAC_25G',
+    name: '25G SFP28 Direct Attach Copper (DAC)',
+    category: 'TWISTED_PAIR',
+    maxBandwidthMbps: 25000,
+    maxDistanceMeters: 5,
+    costPerMeter: 14.0,
+    labourPerMeter: 1.2,
+    supportedPortTypes: ['FIBER_LC', 'SFP_PLUS']
+  },
+  COAX_RG6: {
+    type: 'COAX_RG6',
+    name: 'Coaxial RG6 Quad-Shield Cable',
+    category: 'COAXIAL',
+    maxBandwidthMbps: 1000,
+    maxDistanceMeters: 150,
+    costPerMeter: 1.1,
+    labourPerMeter: 0.9,
+    supportedPortTypes: ['COAX_BNC', 'F_TYPE']
   }
 };
 

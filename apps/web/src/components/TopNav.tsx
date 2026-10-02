@@ -12,7 +12,9 @@ import {
   ClearOutlined, 
   DownloadOutlined, 
   ThunderboltFilled,
-  BranchesOutlined
+  BranchesOutlined,
+  BuildOutlined,
+  PartitionOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -26,6 +28,8 @@ export const TopNav: React.FC = () => {
     toggleValidationDrawer,
     toggleBOQModal,
     toggleCableScheduleModal,
+    toggleWizardModal,
+    autoLayout,
     isSimulating,
     toggleSimulation,
     simulationSpeed,
@@ -131,13 +135,34 @@ export const TopNav: React.FC = () => {
 
         <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
 
+        {/* System Topology Wizard */}
+        <Button
+          type="primary"
+          icon={<BuildOutlined />}
+          onClick={() => toggleWizardModal(true)}
+          style={{ backgroundColor: '#0284c7', borderColor: '#0284c7', fontWeight: 600 }}
+        >
+          Topology Wizard
+        </Button>
+
+        {/* Auto Layout */}
+        <Tooltip title="Organize layout into clean hierarchical tiers">
+          <Button
+            icon={<PartitionOutlined />}
+            onClick={autoLayout}
+            style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+          >
+            Auto Layout
+          </Button>
+        </Tooltip>
+
         {/* Demo Small Office Benchmark Load */}
         <Button
           icon={<BranchesOutlined />}
           onClick={loadDemoTopology}
           style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
         >
-          Load Small Office Demo
+          Small Office Demo
         </Button>
 
         {/* Simulation Controls */}

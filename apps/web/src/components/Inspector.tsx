@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Tabs, 
   Input, 
@@ -7,13 +7,16 @@ import {
   Tag, 
   Typography, 
   Divider, 
-  Popconfirm 
+  Popconfirm,
+  Select,
+  message
 } from 'antd';
 import { 
   DeleteOutlined, 
   WarningOutlined, 
   SlidersOutlined, 
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  SendOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { CABLE_CATALOG } from '@omniflow/network-engine';
@@ -30,8 +33,12 @@ export const Inspector: React.FC = () => {
     removeComponent,
     removeConnection,
     toggleConnectionFault,
-    updateConnectionLength
+    updateConnectionLength,
+    updateConnectionCableType,
+    sendDirectedPing
   } = useGraphStore();
+
+  const [pingTargetId, setPingTargetId] = useState<string | null>(null);
 
   const selectedNode = selectedNodeId ? graph.nodes[selectedNodeId] : null;
   const selectedConn = selectedConnectionId ? graph.connections[selectedConnectionId] : null;
@@ -116,19 +123,25 @@ export const Inspector: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <Text style={{ fontSize: 11, color: '#94a3b8' }}>CABLE SPECIFICATION</Text>
-            <div style={{ fontSize: 13, color: '#38bdf8', fontWeight: 600 }}>
-              {cableSpec.name} ({selectedConn.connectionType})
+            <Select
+              value={selectedConn.connectionType}
+              onChange={(val) => updateConnectionCableType(selectedConn.id, val)}
+              style={{ width: '100%', marginTop: 4 }}
+              options={Object.values(CABLE_CATALOG).map(c => ({
+                label: `${c.name} (${c.type})`,
+                value: c.type
+              }))}
+            />
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              Max: {cableSpec.maxBandwidthMbps} Mbps • Channel Limit: {cableSpec.maxDistanceMeters}m
             </div>
-            <span style={{ fontSize: 11, color: '#64748b' }}>
-              Rated Max: {cableSpec.maxBandwidthMbps} Mbps • Channel Limit: {cableSpec.maxDistanceMeters}m
-            </span>
           </div>
 
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <Text style={{ fontSize: 11, color: '#94a3b8' }}>RUN LENGTH (METERS)</Text>
-              <span style={{ fontSize: 11, color: selectedConn.lengthMeters > 100 ? '#ef4444' : '#10b981' }}>
-                {selectedConn.lengthMeters > 100 ? 'Exceeds TIA-568 (>100m)' : 'Within Standards'}
+              <span style={{ fontSize: 11, color: selectedConn.lengthMeters > cableSpec.maxDistanceMeters ? '#ef4444' : '#10b981' }}>
+                {selectedConn.lengthMeters > cableSpec.maxDistanceMeters ? `Exceeds Limit (>${cableSpec.maxDistanceMeters}m)` : 'Within Standards'}
               </span>
             </div>
             <InputNumber
@@ -224,6 +237,43 @@ export const Inspector: React.FC = () => {
       </Button>
 
       <Divider style={{ borderColor: '#334155', margin: '14px 0' }} />
+
+      {/* Interactive Point-to-Point Ping Tool */}
+      <div style={{ padding: 10, backgroundColor: '#1e293b', borderRadius: 6, marginBottom: 12 }}>
+        <Text style={{ fontSize: 11, color: '#38bdf8', fontWeight: 600 }}>TRANSMIT PING (ICMP)</Text>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <Select
+            placeholder="Select target device..."
+            value={pingTargetId}
+            onChange={(val) => setPingTargetId(val)}
+            style={{ flex: 1 }}
+            size="small"
+            options={Object.values(graph.nodes)
+              .filter(n => n.id !== selectedNode!.id)
+              .map(n => ({
+                label: `${n.tag} (${n.name.split('(')[0]})`,
+                value: n.id
+              }))}
+          />
+          <Button
+            size="small"
+            type="primary"
+            icon={<SendOutlined />}
+            disabled={!pingTargetId}
+            onClick={() => {
+              if (!pingTargetId) return;
+              const reached = sendDirectedPing(selectedNode!.id, pingTargetId);
+              if (reached) {
+                message.success('Packet dispatched! Routing along active path...');
+              } else {
+                message.error('Destination unreachable! No active route or link failed.');
+              }
+            }}
+          >
+            Ping
+          </Button>
+        </div>
+      </div>
 
       {/* Configuration Tabs */}
       <Tabs

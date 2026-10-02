@@ -8,6 +8,7 @@ import { StatusBar } from './components/StatusBar';
 import { ValidationDrawer } from './components/ValidationDrawer';
 import { BOQModal } from './components/BOQModal';
 import { CableScheduleModal } from './components/CableScheduleModal';
+import { NetworkWizardModal } from './components/NetworkWizardModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -79,6 +80,7 @@ export const App: React.FC = () => {
         <ValidationDrawer />
         <BOQModal />
         <CableScheduleModal />
+        <NetworkWizardModal />
       </div>
     </ConfigProvider>
   );
