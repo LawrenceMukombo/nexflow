@@ -42,7 +42,12 @@ import {
   createInitialCollaborationSession,
   stepCollaboratorPresence,
   acquireComponentLock,
-  releaseComponentLock
+  releaseComponentLock,
+  findBestCompatiblePort,
+  autoAssignNodeIp,
+  autoConfigureAllNetworkIps,
+  getSubnetOverview,
+  SubnetOverview
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
@@ -296,6 +301,16 @@ export interface GraphState {
   createDesignRevision: (version: string, summary: string, author?: string) => void;
   revertToRevision: (revisionId: string) => void;
 
+  // Network UX & IPAM Actions
+  isIpamModalOpen: boolean;
+  openIpamModal: () => void;
+  closeIpamModal: () => void;
+  toggleIpamModal: (open?: boolean) => void;
+  autoAssignDeviceIp: (nodeId: string) => boolean;
+  autoConfigureAllIps: () => { updatedCount: number };
+  connectDeviceToDevice: (sourceNodeId: string, targetNodeId: string, cableType?: string) => { success: boolean; message?: string; autoIpAssigned?: boolean };
+  getSubnets: () => SubnetOverview[];
+
   // Flow Tuning Actions
   setShowPacketLabels: (show: boolean) => void;
   setFlowDensity: (density: 'CALM' | 'BALANCED' | 'HIGH') => void;
@@ -485,6 +500,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   failoverTelemetry: createInitialFailoverTelemetry('GRID_OUTAGE_ATS_FAILOVER'),
   collabSession: createInitialCollaborationSession(),
   isCollabDrawerOpen: false,
+  isIpamModalOpen: false,
   engineeringStatus: 'DRAFT',
   designRevisions: [
     {
@@ -2067,6 +2083,92 @@ export const useGraphStore = create<GraphState>((set, get) => ({
         engineeringStatus: rev.status
       });
     }
+  },
+
+  // Network UX & IPAM Actions
+  openIpamModal: () => set({ isIpamModalOpen: true }),
+  closeIpamModal: () => set({ isIpamModalOpen: false }),
+  toggleIpamModal: (open) => set((state) => ({ isIpamModalOpen: open !== undefined ? open : !state.isIpamModalOpen })),
+
+  autoAssignDeviceIp: (nodeId) => {
+    const { graph } = get();
+    const res = autoAssignNodeIp(nodeId, graph);
+    if (res.success && res.ip) {
+      const node = graph.nodes[nodeId];
+      if (node) {
+        get().updateComponentProperties(nodeId, {
+          ...node.properties,
+          ipAddress: res.ip,
+          lanIp: res.ip,
+          subnetMask: res.subnetMask,
+          defaultGateway: res.gateway,
+          gateway: res.gateway
+        });
+        get().validate();
+        return true;
+      }
+    }
+    return false;
+  },
+
+  autoConfigureAllIps: () => {
+    const { graph } = get();
+    const res = autoConfigureAllNetworkIps(graph);
+    for (const [nodeId, assign] of Object.entries(res.assignments) as [string, { ip: string; gateway: string; subnetMask: string }][]) {
+      const node = graph.nodes[nodeId];
+      if (node) {
+        node.properties = {
+          ...node.properties,
+          ipAddress: assign.ip,
+          lanIp: assign.ip,
+          subnetMask: assign.subnetMask,
+          defaultGateway: assign.gateway,
+          gateway: assign.gateway
+        };
+      }
+    }
+    set({ graph: { ...graph } });
+    get().validate();
+    return { updatedCount: res.updatedCount };
+  },
+
+  connectDeviceToDevice: (sourceNodeId, targetNodeId) => {
+    const { graph } = get();
+    const sourceNode = graph.nodes[sourceNodeId];
+    const targetNode = graph.nodes[targetNodeId];
+    if (!sourceNode || !targetNode) return { success: false, message: 'Node not found' };
+
+    for (const srcPort of sourceNode.ports) {
+      if (srcPort.occupiedByConnectionId) continue;
+      const tgtPort = findBestCompatiblePort(sourceNode, srcPort, targetNode, graph);
+      if (tgtPort) {
+        get().startConnection(sourceNode.id, srcPort.id);
+        const res = get().completeConnection(targetNode.id, tgtPort.id);
+        if (res.success) {
+          let autoIpAssigned = false;
+          const isSrcEndpoint = sourceNode.type.includes('PC') || sourceNode.type.includes('WORKSTATION') || sourceNode.type.includes('AP') || sourceNode.type.includes('PRINTER');
+          const isTgtEndpoint = targetNode.type.includes('PC') || targetNode.type.includes('WORKSTATION') || targetNode.type.includes('AP') || targetNode.type.includes('PRINTER');
+
+          if (isSrcEndpoint && (targetNode.type.includes('SWITCH') || targetNode.type.includes('ROUTER'))) {
+            autoIpAssigned = get().autoAssignDeviceIp(sourceNode.id);
+          } else if (isTgtEndpoint && (sourceNode.type.includes('SWITCH') || sourceNode.type.includes('ROUTER'))) {
+            autoIpAssigned = get().autoAssignDeviceIp(targetNode.id);
+          }
+          return {
+            success: true,
+            message: `Connected ${sourceNode.tag}:${srcPort.name} to ${targetNode.tag}:${tgtPort.name}`,
+            autoIpAssigned
+          };
+        }
+        return res;
+      }
+    }
+    return { success: false, message: `No available compatible ports found between ${sourceNode.tag} and ${targetNode.tag}` };
+  },
+
+  getSubnets: () => {
+    const { graph } = get();
+    return getSubnetOverview(graph);
   },
 
   // Flow Tuning Actions

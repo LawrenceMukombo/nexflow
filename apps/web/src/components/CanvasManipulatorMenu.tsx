@@ -95,6 +95,7 @@ export const EnterpriseMenuBar: React.FC = () => {
     openFailoverModal,
     openDigitalTwinModal,
     openCollabDrawer,
+    openIpamModal,
     toggleValidationDrawer,
     validationIssues,
     openCliModal
@@ -524,6 +525,12 @@ export const EnterpriseMenuBar: React.FC = () => {
       ]
     },
     { type: 'divider' },
+    {
+      key: 'tool-ipam-planner',
+      icon: <BranchesOutlined style={{ color: '#06b6d4' }} />,
+      label: 'IPAM Subnet Planner & Auto-DHCP (IPv4)...',
+      onClick: openIpamModal
+    },
     {
       key: 'tool-cli-cmd',
       icon: <CodeOutlined style={{ color: '#34d399' }} />,

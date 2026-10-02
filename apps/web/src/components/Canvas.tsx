@@ -89,6 +89,9 @@ export const Canvas: React.FC = () => {
     startConnection,
     completeConnection,
     cancelConnection,
+    connectDeviceToDevice,
+    autoAssignDeviceIp,
+    openIpamModal,
     setViewport,
     toggleSimulation,
     setSimulationSpeed,
@@ -121,6 +124,7 @@ export const Canvas: React.FC = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragInitialPositions, setDragInitialPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [selectionBox, setSelectionBox] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const [mouseCanvasPos, setMouseCanvasPos] = useState({ x: 0, y: 0 });
   const [isHudCollapsed, setIsHudCollapsed] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
@@ -203,6 +207,12 @@ export const Canvas: React.FC = () => {
     if (contextMenu) setContextMenu(null);
     if (e.button === 2) return; // Right-click handled by onContextMenu
 
+    if (pendingPort && (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg')) {
+      cancelConnection();
+      message.info('Connection drafting cancelled');
+      return;
+    }
+
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
       if (e.shiftKey) {
         // Rubber-band box selection
@@ -225,6 +235,11 @@ export const Canvas: React.FC = () => {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    const zoom = viewport.zoom;
+    const currentCanvasX = Math.round((e.clientX - viewport.x) / zoom);
+    const currentCanvasY = Math.round((e.clientY - viewport.y) / zoom);
+    setMouseCanvasPos({ x: currentCanvasX, y: currentCanvasY });
+
     if (selectionBox && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       setSelectionBox({
@@ -239,9 +254,6 @@ export const Canvas: React.FC = () => {
         y: e.clientY - panStart.y
       });
     } else if (draggingNodeId) {
-      const zoom = viewport.zoom;
-      const currentCanvasX = (e.clientX - viewport.x) / zoom;
-      const currentCanvasY = (e.clientY - viewport.y) / zoom;
       const mainNodeNewX = Math.round(currentCanvasX - dragOffset.x);
       const mainNodeNewY = Math.round(currentCanvasY - dragOffset.y);
 
@@ -566,6 +578,12 @@ export const Canvas: React.FC = () => {
       onClick: autoLayout
     },
     {
+      key: 'ipam-planner',
+      icon: <BranchesOutlined style={{ color: '#06b6d4' }} />,
+      label: 'IPAM Subnet Planner & Auto-DHCP...',
+      onClick: openIpamModal
+    },
+    {
       key: 'surge',
       icon: <ThunderboltOutlined style={{ color: '#eab308' }} />,
       label: 'Trigger Multi-Domain Surge Burst',
@@ -589,6 +607,15 @@ export const Canvas: React.FC = () => {
         icon: <CodeOutlined style={{ color: '#34d399' }} />,
         label: <span style={{ fontWeight: 600 }}>Command Prompt (CMD Console)...</span>,
         onClick: () => openCliModal(node.id)
+      },
+      {
+        key: 'node-auto-dhcp',
+        icon: <ThunderboltOutlined style={{ color: '#06b6d4' }} />,
+        label: 'Auto-Assign IP via DHCP',
+        onClick: () => {
+          autoAssignDeviceIp(node.id);
+          message.success(`Configured IP for ${node.tag} via Auto-DHCP`);
+        }
       },
       {
         key: 'toggle-status',
@@ -1552,6 +1579,54 @@ export const Canvas: React.FC = () => {
             );
           })}
 
+          {/* Live Elastic Rubber-Band Cable Following Cursor During Wiring */}
+          {pendingPort && (() => {
+            const srcNode = graph.nodes[pendingPort.nodeId];
+            if (!srcNode) return null;
+            const srcPort = srcNode.ports.find((p) => p.id === pendingPort.portId);
+            if (!srcPort) return null;
+
+            const dummyTarget = { position: { x: mouseCanvasPos.x, y: mouseCanvasPos.y } } as any;
+            const start = getPortCoordinates(srcNode, srcPort, dummyTarget);
+            const end = (mouseCanvasPos.x === 0 && mouseCanvasPos.y === 0) 
+              ? { x: start.x + 60, y: start.y + 30 } 
+              : mouseCanvasPos;
+
+            const dx = Math.max(35, Math.abs(end.x - start.x) * 0.45);
+            const cx1 = start.x < end.x ? start.x + dx : start.x - dx;
+            const cx2 = end.x > start.x ? end.x - dx : end.x + dx;
+            const pathData = `M ${start.x} ${start.y} C ${cx1} ${start.y}, ${cx2} ${end.y}, ${end.x} ${end.y}`;
+
+            return (
+              <g style={{ pointerEvents: 'none' }}>
+                {/* Cyan ambient aura */}
+                <path
+                  d={pathData}
+                  fill="none"
+                  stroke="#0284c7"
+                  strokeWidth="8"
+                  opacity="0.35"
+                  strokeLinecap="round"
+                />
+                {/* Animated active drafting cable */}
+                <path
+                  d={pathData}
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="3"
+                  strokeDasharray="6 4"
+                  strokeLinecap="round"
+                  className="flow-stream-data"
+                />
+                {/* Source port terminal marker */}
+                <circle cx={start.x} cy={start.y} r="6" fill="#38bdf8" stroke="#ffffff" strokeWidth="2" />
+                {/* Live cursor crosshair guide */}
+                <circle cx={end.x} cy={end.y} r="7" fill="#0284c7" stroke="#ffffff" strokeWidth="2" />
+                <circle cx={end.x} cy={end.y} r="14" fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.8" />
+              </g>
+            );
+          })()}
+
           {/* Render Active Multi-Domain Flow Particles */}
           {activePackets.map((pkt) => {
             // Apply domain visibility filters
@@ -1694,6 +1769,20 @@ export const Canvas: React.FC = () => {
               key={node.id}
               onClick={(e) => {
                 e.stopPropagation();
+                if (pendingPort) {
+                  if (pendingPort.nodeId !== node.id) {
+                    const res = connectDeviceToDevice(pendingPort.nodeId, node.id);
+                    if (res.success) {
+                      message.success(`Smart-connected ${graph.nodes[pendingPort.nodeId]?.tag || 'device'} to ${node.tag}`);
+                    } else {
+                      message.warning(res.message || 'No compatible free port on target device');
+                    }
+                  } else {
+                    cancelConnection();
+                    message.info('Connection drafting cancelled');
+                  }
+                  return;
+                }
                 if (e.shiftKey || e.ctrlKey) {
                   selectNode(node.id, true);
                 } else {
@@ -1719,6 +1808,7 @@ export const Canvas: React.FC = () => {
                 });
               }}
               onMouseDown={(e) => {
+                if (pendingPort) return;
                 if (e.button !== 0) return;
                 e.stopPropagation();
                 const isMulti = e.shiftKey || e.ctrlKey;
@@ -1756,6 +1846,10 @@ export const Canvas: React.FC = () => {
                 borderRadius: 8,
                 border: isSelected 
                   ? '2px solid #38bdf8' 
+                  : pendingPort && pendingPort.nodeId === node.id
+                  ? '2px solid #38bdf8'
+                  : pendingPort && pendingPort.nodeId !== node.id
+                  ? '2px dashed #06b6d4'
                   : isFailed || isNetMisconfigured
                   ? '2px solid #ef4444' 
                   : isElecNode 
@@ -1767,6 +1861,8 @@ export const Canvas: React.FC = () => {
                   : '1px solid #334155',
                 boxShadow: isSelected 
                   ? '0 0 16px rgba(56, 189, 248, 0.35)' 
+                  : pendingPort && pendingPort.nodeId !== node.id
+                  ? '0 0 16px rgba(6, 182, 212, 0.4)'
                   : isFailed || isNetMisconfigured 
                   ? '0 0 14px rgba(239, 68, 68, 0.45)' 
                   : isElecNode
@@ -1774,7 +1870,9 @@ export const Canvas: React.FC = () => {
                   : isPlumbNode
                   ? '0 4px 12px rgba(6, 182, 212, 0.12)'
                   : '0 4px 10px rgba(0, 0, 0, 0.4)',
-                cursor: draggingNodeId === node.id ? 'grabbing' : 'grab',
+                cursor: pendingPort 
+                  ? (pendingPort.nodeId === node.id ? 'default' : 'crosshair') 
+                  : draggingNodeId === node.id ? 'grabbing' : 'grab',
                 userSelect: 'none',
                 transition: 'box-shadow 0.15s, border-color 0.15s'
               }}
@@ -1818,6 +1916,11 @@ export const Canvas: React.FC = () => {
                   >
                     {node.tag}
                   </Tag>
+                  {pendingPort && pendingPort.nodeId !== node.id && (
+                    <Tag color="#0284c7" style={{ margin: 0, fontSize: 8.5, fontWeight: 700, padding: '0 4px', lineHeight: '14px' }}>
+                      ⚡ SNAP
+                    </Tag>
+                  )}
                   {isNetMisconfigured && (
                     <Tag color="error" style={{ margin: 0, fontSize: 9, fontWeight: 700, padding: '0 4px', lineHeight: '14px' }}>
                       IP ERROR
@@ -1943,12 +2046,38 @@ export const Canvas: React.FC = () => {
                         border: '1px solid #dc2626',
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'space-between',
                         gap: 4
                       }}>
-                        <span>⛔</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {netStatus.statusText === 'SUBNET_MISMATCH' ? 'Wrong Subnet (No Link)' : 'IP Config Error'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                          <span>⛔</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {netStatus.statusText === 'SUBNET_MISMATCH' ? 'Wrong Subnet' : 'IP Config Error'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            autoAssignDeviceIp(node.id);
+                            message.success(`Repaired ${node.tag} network with Auto-DHCP`);
+                          }}
+                          style={{
+                            background: '#0284c7',
+                            border: 'none',
+                            borderRadius: 3,
+                            color: '#ffffff',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 2
+                          }}
+                        >
+                          ⚡ Fix IP
+                        </button>
                       </div>
                     )}
                     {node.properties.vlanId !== undefined && (
@@ -2254,6 +2383,48 @@ export const Canvas: React.FC = () => {
           <Button size="small" type="text" icon={<SaveOutlined style={{ color: '#f59e0b' }} />} onClick={() => toggleSaveAssemblyModal(true)} style={{ color: '#f8fafc' }}>
             Save Assembly
           </Button>
+          {/* Quick Subnet DHCP Allocation for Selected Devices */}
+          <Button 
+            size="small" 
+            type="text" 
+            icon={<ThunderboltOutlined style={{ color: '#06b6d4' }} />} 
+            onClick={() => {
+              for (const id of selectedNodeIds) {
+                autoAssignDeviceIp(id);
+              }
+              message.success(`Configured Auto-DHCP for ${selectedNodeIds.length} devices`);
+            }} 
+            style={{ color: '#f8fafc' }}
+          >
+            Auto-DHCP
+          </Button>
+          {/* Quick Ping Diagnostics when 2 nodes are selected */}
+          {selectedNodeIds.length === 2 && (() => {
+            const nodeA = graph.nodes[selectedNodeIds[0]];
+            const nodeB = graph.nodes[selectedNodeIds[1]];
+            if (!nodeA || !nodeB) return null;
+            const ipB = (nodeB.properties.ipAddress || nodeB.properties.lanIp) as string;
+
+            return (
+              <Button
+                size="small"
+                type="primary"
+                ghost
+                icon={<CodeOutlined />}
+                style={{ borderColor: '#38bdf8', color: '#38bdf8', fontWeight: 600 }}
+                onClick={() => {
+                  if (ipB) {
+                    openCliModal(nodeA.id);
+                    message.info(`Opened CLI for ${nodeA.tag}. You can run: ping ${ipB}`);
+                  } else {
+                    message.warning(`Target device ${nodeB.tag} has no configured IP address.`);
+                  }
+                }}
+              >
+                Ping (CMD)
+              </Button>
+            );
+          })()}
           <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => deleteSelectedComponents()}>
             Delete
           </Button>

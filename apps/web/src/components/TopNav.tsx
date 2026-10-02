@@ -17,7 +17,8 @@ import {
   BarChartOutlined,
   AlertOutlined,
   DeploymentUnitOutlined,
-  TeamOutlined
+  TeamOutlined,
+  BranchesOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -45,6 +46,7 @@ export const TopNav: React.FC = () => {
     openFailoverModal,
     openDigitalTwinModal,
     openCollabDrawer,
+    openIpamModal,
     engineeringStatus,
     setEngineeringStatus,
     currentProjectName,
@@ -253,10 +255,36 @@ export const TopNav: React.FC = () => {
           </Button>
         </Tooltip>
 
+        {/* Visual IPAM Subnet Planner & Auto-DHCP */}
+        <Tooltip title="Visual IPAM Subnet Planner & Auto-DHCP Allocation">
+          <Button
+            size="small"
+            onClick={openIpamModal}
+            style={{ 
+              backgroundColor: '#1e293b', 
+              borderColor: '#0284c7', 
+              color: '#38bdf8', 
+              fontSize: 12, 
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5
+            }}
+          >
+            <span>🌐 IPAM Planner</span>
+          </Button>
+        </Tooltip>
+
         {/* Documentation & Reports Dropdown */}
         <Dropdown
           menu={{
             items: [
+              {
+                key: 'doc-ipam',
+                icon: <BranchesOutlined style={{ color: '#06b6d4' }} />,
+                label: 'IPAM Subnet Planner & Auto-DHCP',
+                onClick: openIpamModal
+              },
               {
                 key: 'doc-analytics',
                 icon: <BarChartOutlined style={{ color: '#38bdf8' }} />,

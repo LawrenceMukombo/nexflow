@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { ComponentIcon } from './ComponentIcon';
+import { SwitchFaceplate } from './SwitchFaceplate';
 
 export const QuickEditModal: React.FC = () => {
   const {
@@ -19,7 +20,8 @@ export const QuickEditModal: React.FC = () => {
     closeQuickEditModal,
     updateComponentProperties,
     removeComponent,
-    duplicateComponent
+    duplicateComponent,
+    autoAssignDeviceIp
   } = useGraphStore();
 
   const [form] = Form.useForm();
@@ -93,6 +95,29 @@ export const QuickEditModal: React.FC = () => {
   const isElec = node.domain === 'ELECTRICAL' || node.type.includes('TRANSFORMER') || node.type.includes('UPS') || node.type.includes('PDU') || node.type.includes('GENERATOR') || node.type.includes('SOLAR');
   const isPlumb = node.domain === 'PLUMBING' || node.type.includes('CHILLER') || node.type.includes('PUMP') || node.type.includes('CRAH') || node.type.includes('WATER') || node.type.includes('TANK');
 
+  const handleAutoDhcp = () => {
+    if (!node) return;
+    autoAssignDeviceIp(node.id);
+    const updated = useGraphStore.getState().graph.nodes[node.id];
+    if (updated) {
+      form.setFieldsValue({
+        ipAddress: updated.properties.ipAddress || updated.properties.lanIp || '',
+        subnetMask: updated.properties.subnetMask || '255.255.255.0',
+        gateway: updated.properties.defaultGateway || updated.properties.gateway || '',
+      });
+      message.success(`Auto-assigned IP ${updated.properties.ipAddress} via DHCP`);
+    }
+  };
+
+  const isNetworkDevice = !isElec && !isPlumb && (
+    node.type.includes('SWITCH') || 
+    node.type.includes('ROUTER') || 
+    node.type.includes('GATEWAY') || 
+    node.type.includes('FIREWALL') ||
+    node.type.includes('SERVER') ||
+    node.domain === 'NETWORK'
+  );
+
   return (
     <Modal
       title={
@@ -120,7 +145,7 @@ export const QuickEditModal: React.FC = () => {
           Save Changes
         </Button>
       ]}
-      width={520}
+      width={680}
       styles={{
         content: { backgroundColor: '#0f172a', border: '1px solid #334155' },
         header: { backgroundColor: '#0f172a', borderBottom: '1px solid #1e293b' },
@@ -128,6 +153,13 @@ export const QuickEditModal: React.FC = () => {
       }}
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        {/* Switch Faceplate if applicable */}
+        {isNetworkDevice && (
+          <div style={{ marginBottom: 16 }}>
+            <SwitchFaceplate node={node} />
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Form.Item name="tag" label={<span style={{ color: '#cbd5e1' }}>Device Tag</span>} rules={[{ required: true }]}>
             <Input placeholder="e.g. RTR-01, SW-CORE" />
@@ -153,8 +185,20 @@ export const QuickEditModal: React.FC = () => {
         {/* Network Domain Fields */}
         {!isElec && !isPlumb && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#38bdf8', fontSize: 13, fontWeight: 600 }}>
-              <BranchesOutlined /> IP & Network Configuration
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontSize: 13, fontWeight: 600 }}>
+                <BranchesOutlined /> IP & Network Configuration
+              </div>
+              <Button 
+                size="small" 
+                type="primary" 
+                ghost 
+                icon={<ThunderboltOutlined />}
+                onClick={handleAutoDhcp}
+                style={{ fontSize: 11, borderColor: '#0284c7', color: '#38bdf8' }}
+              >
+                ⚡ Auto-DHCP Subnet
+              </Button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Form.Item name="ipAddress" label={<span style={{ color: '#cbd5e1' }}>IP Address</span>}>

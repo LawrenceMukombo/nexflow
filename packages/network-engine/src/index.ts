@@ -12,3 +12,4 @@ export * from './drawingSheet';
 export * from './failoverSimulator';
 export * from './isometricBim';
 export * from './collaboration';
+export * from './ipam';
