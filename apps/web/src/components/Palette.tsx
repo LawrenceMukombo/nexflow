@@ -7,7 +7,9 @@ import {
   Typography, 
   Segmented, 
   Select, 
-  Tag 
+  Tag,
+  Checkbox,
+  message
 } from 'antd';
 import { 
   SearchOutlined, 
@@ -28,7 +30,9 @@ import {
   ThunderboltOutlined,
   TableOutlined,
   BookOutlined,
-  AppstoreAddOutlined
+  AppstoreAddOutlined,
+  CheckSquareOutlined,
+  ClearOutlined
 } from '@ant-design/icons';
 import { NETWORK_COMPONENT_CATALOG } from '@omniflow/network-engine';
 import { useGraphStore } from '../store/graphStore';
@@ -38,9 +42,12 @@ const { Text } = Typography;
 export const Palette: React.FC = () => {
   const [tabMode, setTabMode] = useState<'catalog' | 'libraries'>('catalog');
   const [search, setSearch] = useState('');
+  const [batchMode, setBatchMode] = useState<boolean>(false);
+  const [batchSelectedTypes, setBatchSelectedTypes] = useState<string[]>([]);
   
   const {
     addComponent,
+    addComponentsBatch,
     insertAssembly,
     libraries,
     activeLibraryId,
@@ -48,6 +55,21 @@ export const Palette: React.FC = () => {
     toggleLibraryModal,
     toggleCreateComponentModal
   } = useGraphStore();
+
+  const toggleBatchItem = (type: string) => {
+    setBatchSelectedTypes(prev => {
+      const idx = prev.indexOf(type);
+      if (idx >= 0) {
+        return prev.filter((_, i) => i !== idx);
+      } else {
+        return [...prev, type];
+      }
+    });
+  };
+
+  const addBatchCount = (type: string) => {
+    setBatchSelectedTypes(prev => [...prev, type]);
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -180,6 +202,97 @@ export const Palette: React.FC = () => {
           allowClear
           size="middle"
         />
+
+        {/* Multi-Component Batch Mode Toggle & Summary */}
+        {tabMode === 'catalog' && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Button
+                size="small"
+                type={batchMode ? 'primary' : 'default'}
+                icon={<CheckSquareOutlined />}
+                onClick={() => setBatchMode(!batchMode)}
+                style={{
+                  backgroundColor: batchMode ? '#0284c7' : '#1e293b',
+                  borderColor: batchMode ? '#38bdf8' : '#334155',
+                  color: '#f8fafc',
+                  fontSize: 12
+                }}
+              >
+                {batchMode ? 'Multi-Select Active' : 'Select Multiple'}
+              </Button>
+              {batchSelectedTypes.length > 0 && (
+                <Button
+                  size="small"
+                  type="link"
+                  danger
+                  icon={<ClearOutlined />}
+                  onClick={() => setBatchSelectedTypes([])}
+                >
+                  Clear ({batchSelectedTypes.length})
+                </Button>
+              )}
+            </div>
+
+            {/* Draggable Batch Deploy Card */}
+            {batchSelectedTypes.length > 0 && (
+              <div
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/omniflow-components-batch', JSON.stringify(batchSelectedTypes));
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+                style={{
+                  marginTop: 8,
+                  padding: '10px',
+                  backgroundColor: '#0369a1',
+                  border: '1px solid #38bdf8',
+                  borderRadius: 8,
+                  color: '#fff',
+                  cursor: 'grab',
+                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.4)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>📦</span>
+                    <span>{batchSelectedTypes.length} Components Selected</span>
+                  </div>
+                  <span style={{ fontSize: 10, backgroundColor: 'rgba(255,255,255,0.25)', padding: '2px 6px', borderRadius: 4, fontWeight: 600 }}>
+                    Drag to Canvas
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: '#e0f2fe', marginBottom: 8 }}>
+                  Drag this bundle onto canvas to drop and wire these {batchSelectedTypes.length} components together!
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Button
+                    size="small"
+                    style={{ backgroundColor: '#fff', color: '#0369a1', fontWeight: 600, border: 'none', flex: 1 }}
+                    onClick={() => {
+                      addComponentsBatch(batchSelectedTypes, { x: 350, y: 250 }, 'star');
+                      message.success(`Deployed ${batchSelectedTypes.length} components in Star Topology`);
+                      setBatchSelectedTypes([]);
+                    }}
+                  >
+                    Deploy (Star)
+                  </Button>
+                  <Button
+                    size="small"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', flex: 1 }}
+                    onClick={() => {
+                      addComponentsBatch(batchSelectedTypes, { x: 350, y: 250 }, 'daisy');
+                      message.success(`Deployed ${batchSelectedTypes.length} components in Daisy Chain`);
+                      setBatchSelectedTypes([]);
+                    }}
+                  >
+                    Deploy (Chain)
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Tab 1: Standard Equipment Catalog */}
@@ -198,56 +311,92 @@ export const Palette: React.FC = () => {
               ),
               children: (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {cat.items.map(item => (
-                    <div
-                      key={item.type}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('application/omniflow-component', item.type);
-                        e.dataTransfer.effectAllowed = 'copy';
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 10px',
-                        backgroundColor: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: 6,
-                        cursor: 'grab',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#38bdf8';
-                        e.currentTarget.style.backgroundColor = '#243248';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = '#334155';
-                        e.currentTarget.style.backgroundColor = '#1e293b';
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {getIcon(item.type)}
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
-                            {item.name}
-                          </span>
-                          <span style={{ fontSize: 10, color: '#94a3b8' }}>
-                            {item.portsTemplate.length} ports • {item.defaultCost.currency} ${item.defaultCost.unitCost}
-                          </span>
+                  {cat.items.map(item => {
+                    const countInBatch = batchSelectedTypes.filter(t => t === item.type).length;
+                    const isSelected = countInBatch > 0;
+
+                    return (
+                      <div
+                        key={item.type}
+                        draggable
+                        onDragStart={(e) => {
+                          if (isSelected && batchSelectedTypes.length > 1) {
+                            e.dataTransfer.setData('application/omniflow-components-batch', JSON.stringify(batchSelectedTypes));
+                            e.dataTransfer.effectAllowed = 'copy';
+                          } else {
+                            e.dataTransfer.setData('application/omniflow-component', item.type);
+                            e.dataTransfer.effectAllowed = 'copy';
+                          }
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 10px',
+                          backgroundColor: isSelected ? '#1e3a5f' : '#1e293b',
+                          border: isSelected ? '1px solid #38bdf8' : '1px solid #334155',
+                          borderRadius: 6,
+                          cursor: 'grab',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#38bdf8';
+                          if (!isSelected) e.currentTarget.style.backgroundColor = '#243248';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = isSelected ? '#38bdf8' : '#334155';
+                          e.currentTarget.style.backgroundColor = isSelected ? '#1e3a5f' : '#1e293b';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {batchMode && (
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={() => toggleBatchItem(item.type)}
+                            />
+                          )}
+                          {getIcon(item.type)}
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: '#f8fafc' }}>
+                                {item.name}
+                              </span>
+                              {countInBatch > 0 && (
+                                <Tag color="#0284c7" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+                                  ×{countInBatch}
+                                </Tag>
+                              )}
+                            </div>
+                            <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                              {item.portsTemplate.length} ports • {item.defaultCost.currency} ${item.defaultCost.unitCost}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {batchMode ? (
+                            <Tooltip title="Add 1 more to batch">
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
+                                onClick={() => addBatchCount(item.type)}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Tooltip title="Click to add to canvas">
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
+                                onClick={() => addComponent(item.type, { x: 300, y: 250 })}
+                              />
+                            </Tooltip>
+                          )}
                         </div>
                       </div>
-
-                      <Tooltip title="Click to add to canvas">
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<PlusOutlined style={{ color: '#38bdf8' }} />}
-                          onClick={() => addComponent(item.type, { x: 300, y: 250 })}
-                        />
-                      </Tooltip>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             }))}

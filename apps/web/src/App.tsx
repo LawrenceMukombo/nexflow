@@ -13,6 +13,7 @@ import { LibraryManagerModal } from './components/LibraryManagerModal';
 import { CreateComponentModal } from './components/CreateComponentModal';
 import { SaveAssemblyModal } from './components/SaveAssemblyModal';
 import { ProjectsManagerModal } from './components/ProjectsManagerModal';
+import { QuickEditModal } from './components/QuickEditModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -89,6 +90,7 @@ export const App: React.FC = () => {
         <CreateComponentModal />
         <SaveAssemblyModal />
         <ProjectsManagerModal />
+        <QuickEditModal />
       </div>
     </ConfigProvider>
   );

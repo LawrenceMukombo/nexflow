@@ -10,6 +10,7 @@ import {
   ComponentLibrary,
   LibraryAssembly,
   ComponentTemplate,
+  ComponentPort,
   SavedProject
 } from '@omniflow/shared-types';
 import { 
@@ -40,6 +41,8 @@ export interface GraphState {
   graph: EngineeringGraph;
   activeDomain: EngineeringDomain;
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
+  copiedNodeIds: string[];
   selectedConnectionId: string | null;
   pendingPort: { nodeId: string; portId: string } | null;
   viewport: { x: number; y: number; zoom: number };
@@ -56,6 +59,8 @@ export interface GraphState {
   isCreateComponentModalOpen: boolean;
   isSaveAssemblyModalOpen: boolean;
   isProjectsModalOpen: boolean;
+  isQuickEditModalOpen: boolean;
+  quickEditNodeId: string | null;
 
   // Projects Management
   currentProjectId: string;
@@ -80,11 +85,25 @@ export interface GraphState {
 
   // Actions
   setActiveDomain: (domain: EngineeringDomain) => void;
-  selectNode: (id: string | null) => void;
+  selectNode: (id: string | null, additive?: boolean) => void;
   selectConnection: (id: string | null) => void;
+  selectNodes: (ids: string[], additive?: boolean) => void;
+  selectAllNodes: () => void;
+  clearSelection: () => void;
   addComponent: (type: string, position: { x: number; y: number }) => void;
+  addComponentsBatch: (types: string[], basePosition: { x: number; y: number }, autoConnectMode?: 'none' | 'star' | 'daisy') => string[];
   moveComponent: (id: string, position: { x: number; y: number }) => void;
+  moveComponentsBatch: (delta: { x: number; y: number }) => void;
   removeComponent: (id: string) => void;
+  deleteSelectedComponents: () => void;
+  duplicateComponent: (id: string, offset?: { x: number; y: number }) => string;
+  duplicateSelectedComponents: (offset?: { x: number; y: number }) => void;
+  connectSelectedNodes: (topology: 'star' | 'daisy' | 'mesh', cableType?: string) => void;
+  alignSelectedNodes: (alignment: 'horizontal' | 'vertical' | 'grid') => void;
+  copySelectedNodes: () => void;
+  pasteCopiedNodes: (position?: { x: number; y: number }) => void;
+  openQuickEditModal: (nodeId: string) => void;
+  closeQuickEditModal: () => void;
   updateComponentProperties: (id: string, properties: Record<string, unknown>) => void;
   toggleComponentFault: (id: string) => void;
   
@@ -284,6 +303,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   graph: initialProjects[0]?.graph || initialGraph,
   activeDomain: 'NETWORK',
   selectedNodeId: null,
+  selectedNodeIds: [],
+  copiedNodeIds: [],
   selectedConnectionId: null,
   pendingPort: null,
   viewport: { x: 50, y: 50, zoom: 0.9 },
@@ -297,6 +318,8 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isCreateComponentModalOpen: false,
   isSaveAssemblyModalOpen: false,
   isProjectsModalOpen: false,
+  isQuickEditModalOpen: false,
+  quickEditNodeId: null,
 
   currentProjectId: initialProjects[0]?.id || 'proj_default',
   currentProjectName: initialProjects[0]?.name || 'Corporate HQ Network Blueprint',
@@ -323,8 +346,67 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
   setActiveDomain: (domain) => set({ activeDomain: domain }),
 
-  selectNode: (id) => set({ selectedNodeId: id, selectedConnectionId: null }),
-  selectConnection: (id) => set({ selectedConnectionId: id, selectedNodeId: null }),
+  selectNode: (id, additive = false) => {
+    set((state) => {
+      if (!id) {
+        return { selectedNodeId: null, selectedNodeIds: [], selectedConnectionId: null };
+      }
+      if (additive) {
+        const setIds = new Set(state.selectedNodeIds);
+        if (setIds.has(id)) {
+          setIds.delete(id);
+        } else {
+          setIds.add(id);
+        }
+        const updated = Array.from(setIds);
+        return {
+          selectedNodeIds: updated,
+          selectedNodeId: updated[0] || null,
+          selectedConnectionId: null
+        };
+      }
+      return {
+        selectedNodeId: id,
+        selectedNodeIds: [id],
+        selectedConnectionId: null
+      };
+    });
+  },
+
+  selectNodes: (ids, additive = false) => {
+    set((state) => {
+      const newIds = additive ? Array.from(new Set([...state.selectedNodeIds, ...ids])) : ids;
+      return {
+        selectedNodeIds: newIds,
+        selectedNodeId: newIds[0] || null,
+        selectedConnectionId: null
+      };
+    });
+  },
+
+  selectAllNodes: () => {
+    set((state) => {
+      const allIds = Object.keys(state.graph.nodes);
+      return {
+        selectedNodeIds: allIds,
+        selectedNodeId: allIds[0] || null,
+        selectedConnectionId: null
+      };
+    });
+  },
+
+  clearSelection: () => {
+    set({
+      selectedNodeId: null,
+      selectedNodeIds: [],
+      selectedConnectionId: null
+    });
+  },
+
+  openQuickEditModal: (nodeId) => set({ isQuickEditModalOpen: true, quickEditNodeId: nodeId }),
+  closeQuickEditModal: () => set({ isQuickEditModalOpen: false, quickEditNodeId: null }),
+
+  selectConnection: (id: string | null) => set({ selectedConnectionId: id, selectedNodeId: null, selectedNodeIds: [] }),
 
   addComponent: (type, position) => {
     const { graph } = get();
@@ -344,11 +426,101 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     set((state) => ({
       graph: updatedGraph,
       selectedNodeId: newComponent.id,
+      selectedNodeIds: [newComponent.id],
       selectedConnectionId: null,
       ...pushSnapshot({ ...state, graph: updatedGraph })
     }));
 
     get().validate();
+  },
+
+  addComponentsBatch: (types, basePosition, autoConnectMode = 'none') => {
+    const { graph } = get();
+    const createdIds: string[] = [];
+    const newNodes = { ...graph.nodes };
+    const cols = Math.min(3, Math.max(2, Math.ceil(Math.sqrt(types.length))));
+    const spacingX = 260;
+    const spacingY = 160;
+
+    types.forEach((type, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const pos = {
+        x: basePosition.x + col * spacingX,
+        y: basePosition.y + row * spacingY
+      };
+      const comp = createComponentInstance(type, graph.designId, pos);
+      newNodes[comp.id] = comp;
+      createdIds.push(comp.id);
+    });
+
+    const newConnections = { ...graph.connections };
+    const isPortFree = (port: ComponentPort) => 
+      !port.occupiedByConnectionId && !Object.values(newConnections).some(c => c.sourcePortId === port.id || c.targetPortId === port.id);
+
+    if (autoConnectMode === 'star' && createdIds.length >= 2) {
+      const coreNode = newNodes[createdIds[0]];
+      for (let i = 1; i < createdIds.length; i++) {
+        const targetNode = newNodes[createdIds[i]];
+        const srcPort = coreNode.ports.find(isPortFree);
+        const tgtPort = targetNode.ports.find(isPortFree);
+        if (srcPort && tgtPort) {
+          const comp = checkPortCompatibility(srcPort, tgtPort);
+          if (comp.compatible) {
+            const conn = createConnectionInstance(
+              graph.designId,
+              coreNode.id,
+              srcPort.id,
+              targetNode.id,
+              tgtPort.id,
+              comp.recommendedCable || 'CAT6',
+              15
+            );
+            newConnections[conn.id] = conn;
+          }
+        }
+      }
+    } else if (autoConnectMode === 'daisy' && createdIds.length >= 2) {
+      for (let i = 0; i < createdIds.length - 1; i++) {
+        const srcNode = newNodes[createdIds[i]];
+        const tgtNode = newNodes[createdIds[i + 1]];
+        const srcPort = srcNode.ports.find(isPortFree);
+        const tgtPort = tgtNode.ports.find(isPortFree);
+        if (srcPort && tgtPort) {
+          const comp = checkPortCompatibility(srcPort, tgtPort);
+          if (comp.compatible) {
+            const conn = createConnectionInstance(
+              graph.designId,
+              srcNode.id,
+              srcPort.id,
+              tgtNode.id,
+              tgtPort.id,
+              comp.recommendedCable || 'CAT6',
+              15
+            );
+            newConnections[conn.id] = conn;
+          }
+        }
+      }
+    }
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: newNodes,
+      connections: newConnections,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      selectedNodeIds: createdIds,
+      selectedNodeId: createdIds[0] || null,
+      selectedConnectionId: null,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+
+    get().validate();
+    return createdIds;
   },
 
   moveComponent: (id, position) => {
@@ -368,6 +540,33 @@ export const useGraphStore = create<GraphState>((set, get) => ({
             ...state.graph.nodes,
             [id]: updatedNode
           }
+        }
+      };
+    });
+  },
+
+  moveComponentsBatch: (delta) => {
+    set((state) => {
+      const updatedNodes = { ...state.graph.nodes };
+      let changed = false;
+      for (const id of state.selectedNodeIds) {
+        const node = updatedNodes[id];
+        if (node) {
+          updatedNodes[id] = {
+            ...node,
+            position: {
+              x: Math.max(20, node.position.x + delta.x),
+              y: Math.max(20, node.position.y + delta.y)
+            }
+          };
+          changed = true;
+        }
+      }
+      if (!changed) return state;
+      return {
+        graph: {
+          ...state.graph,
+          nodes: updatedNodes
         }
       };
     });
@@ -398,11 +597,299 @@ export const useGraphStore = create<GraphState>((set, get) => ({
 
     set((state) => ({
       graph: updatedGraph,
+      selectedNodeIds: state.selectedNodeIds.filter(nid => nid !== id),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
       ...pushSnapshot({ ...state, graph: updatedGraph })
     }));
 
     get().validate();
+  },
+
+  deleteSelectedComponents: () => {
+    const { graph, selectedNodeIds } = get();
+    if (selectedNodeIds.length === 0) return;
+
+    const targetIds = new Set(selectedNodeIds);
+    const remainingNodes: Record<string, EngineeringComponent> = {};
+    for (const [id, node] of Object.entries(graph.nodes)) {
+      if (!targetIds.has(id)) {
+        remainingNodes[id] = node;
+      }
+    }
+
+    const remainingConnections: Record<string, EngineeringConnection> = {};
+    for (const [id, conn] of Object.entries(graph.connections)) {
+      if (!targetIds.has(conn.sourceComponentId) && !targetIds.has(conn.targetComponentId)) {
+        remainingConnections[id] = conn;
+      }
+    }
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: remainingNodes,
+      connections: remainingConnections,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      selectedNodeId: null,
+      selectedNodeIds: [],
+      selectedConnectionId: null,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+
+    get().validate();
+  },
+
+  duplicateComponent: (id, offset = { x: 50, y: 50 }) => {
+    const { graph } = get();
+    const original = graph.nodes[id];
+    if (!original) return '';
+
+    const newPosition = {
+      x: original.position.x + offset.x,
+      y: original.position.y + offset.y
+    };
+    const cloned = createComponentInstance(
+      original.type,
+      graph.designId,
+      newPosition,
+      `${original.tag}_COPY`
+    );
+    cloned.properties = { ...original.properties };
+    if (original.domain) cloned.domain = original.domain;
+
+    const newNodes = {
+      ...graph.nodes,
+      [cloned.id]: cloned
+    };
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: newNodes,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      selectedNodeId: cloned.id,
+      selectedNodeIds: [cloned.id],
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+
+    get().validate();
+    return cloned.id;
+  },
+
+  duplicateSelectedComponents: (offset = { x: 60, y: 60 }) => {
+    const { graph, selectedNodeIds } = get();
+    if (selectedNodeIds.length === 0) return;
+
+    const idMap: Record<string, string> = {};
+    const newNodes: Record<string, EngineeringComponent> = { ...graph.nodes };
+    const newlyCreatedIds: string[] = [];
+
+    for (const id of selectedNodeIds) {
+      const orig = graph.nodes[id];
+      if (!orig) continue;
+      const cloned = createComponentInstance(
+        orig.type,
+        graph.designId,
+        { x: orig.position.x + offset.x, y: orig.position.y + offset.y },
+        `${orig.tag}_COPY`
+      );
+      cloned.properties = { ...orig.properties };
+      if (orig.domain) cloned.domain = orig.domain;
+      idMap[id] = cloned.id;
+      newNodes[cloned.id] = cloned;
+      newlyCreatedIds.push(cloned.id);
+    }
+
+    const newConnections: Record<string, EngineeringConnection> = { ...graph.connections };
+    for (const conn of Object.values(graph.connections)) {
+      if (idMap[conn.sourceComponentId] && idMap[conn.targetComponentId]) {
+        const srcNode = newNodes[idMap[conn.sourceComponentId]];
+        const tgtNode = newNodes[idMap[conn.targetComponentId]];
+        const origSrc = graph.nodes[conn.sourceComponentId];
+        const origTgt = graph.nodes[conn.targetComponentId];
+        const srcPortIdx = origSrc.ports.findIndex(p => p.id === conn.sourcePortId);
+        const tgtPortIdx = origTgt.ports.findIndex(p => p.id === conn.targetPortId);
+        if (srcPortIdx >= 0 && tgtPortIdx >= 0 && srcNode.ports[srcPortIdx] && tgtNode.ports[tgtPortIdx]) {
+          const clonedConn = createConnectionInstance(
+            graph.designId,
+            srcNode.id,
+            srcNode.ports[srcPortIdx].id,
+            tgtNode.id,
+            tgtNode.ports[tgtPortIdx].id,
+            conn.connectionType,
+            conn.lengthMeters
+          );
+          newConnections[clonedConn.id] = clonedConn;
+        }
+      }
+    }
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: newNodes,
+      connections: newConnections,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      selectedNodeIds: newlyCreatedIds,
+      selectedNodeId: newlyCreatedIds[0] || null,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+
+    get().validate();
+  },
+
+  connectSelectedNodes: (topology, cableType) => {
+    const { graph, selectedNodeIds } = get();
+    if (selectedNodeIds.length < 2) return;
+    const newConnections = { ...graph.connections };
+    const nodes = selectedNodeIds.map(id => graph.nodes[id]).filter(Boolean);
+    const isPortFree = (port: ComponentPort) => 
+      !port.occupiedByConnectionId && !Object.values(newConnections).some(c => c.sourcePortId === port.id || c.targetPortId === port.id);
+
+    if (topology === 'star') {
+      const center = nodes[0];
+      for (let i = 1; i < nodes.length; i++) {
+        const target = nodes[i];
+        const srcPort = center.ports.find(isPortFree);
+        const tgtPort = target.ports.find(isPortFree);
+        if (srcPort && tgtPort) {
+          const comp = checkPortCompatibility(srcPort, tgtPort);
+          if (comp.compatible) {
+            const conn = createConnectionInstance(
+              graph.designId,
+              center.id,
+              srcPort.id,
+              target.id,
+              tgtPort.id,
+              cableType || comp.recommendedCable || 'CAT6',
+              15
+            );
+            newConnections[conn.id] = conn;
+          }
+        }
+      }
+    } else if (topology === 'daisy') {
+      for (let i = 0; i < nodes.length - 1; i++) {
+        const src = nodes[i];
+        const tgt = nodes[i + 1];
+        const srcPort = src.ports.find(isPortFree);
+        const tgtPort = tgt.ports.find(isPortFree);
+        if (srcPort && tgtPort) {
+          const comp = checkPortCompatibility(srcPort, tgtPort);
+          if (comp.compatible) {
+            const conn = createConnectionInstance(
+              graph.designId,
+              src.id,
+              srcPort.id,
+              tgt.id,
+              tgtPort.id,
+              cableType || comp.recommendedCable || 'CAT6',
+              15
+            );
+            newConnections[conn.id] = conn;
+          }
+        }
+      }
+    } else if (topology === 'mesh') {
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const src = nodes[i];
+          const tgt = nodes[j];
+          const srcPort = src.ports.find(isPortFree);
+          const tgtPort = tgt.ports.find(isPortFree);
+          if (srcPort && tgtPort) {
+            const comp = checkPortCompatibility(srcPort, tgtPort);
+            if (comp.compatible) {
+              const conn = createConnectionInstance(
+                graph.designId,
+                src.id,
+                srcPort.id,
+                tgt.id,
+                tgtPort.id,
+                cableType || comp.recommendedCable || 'CAT6',
+                15
+              );
+              newConnections[conn.id] = conn;
+            }
+          }
+        }
+      }
+    }
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      connections: newConnections,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+
+    get().validate();
+  },
+
+  alignSelectedNodes: (alignment) => {
+    const { graph, selectedNodeIds } = get();
+    if (selectedNodeIds.length < 2) return;
+    const nodes = selectedNodeIds.map(id => graph.nodes[id]).filter(Boolean);
+    const updatedNodes = { ...graph.nodes };
+
+    if (alignment === 'horizontal') {
+      const avgY = Math.round(nodes.reduce((acc, n) => acc + n.position.y, 0) / nodes.length);
+      nodes.forEach(n => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, y: avgY } };
+      });
+    } else if (alignment === 'vertical') {
+      const avgX = Math.round(nodes.reduce((acc, n) => acc + n.position.x, 0) / nodes.length);
+      nodes.forEach(n => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, x: avgX } };
+      });
+    } else if (alignment === 'grid') {
+      const minX = Math.min(...nodes.map(n => n.position.x));
+      const minY = Math.min(...nodes.map(n => n.position.y));
+      const cols = Math.ceil(Math.sqrt(nodes.length));
+      nodes.forEach((n, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        updatedNodes[n.id] = {
+          ...n,
+          position: { x: minX + col * 260, y: minY + row * 160 }
+        };
+      });
+    }
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: updatedNodes,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+  },
+
+  copySelectedNodes: () => {
+    const { selectedNodeIds } = get();
+    set({ copiedNodeIds: [...selectedNodeIds] });
+  },
+
+  pasteCopiedNodes: (position) => {
+    const { copiedNodeIds } = get();
+    if (copiedNodeIds.length === 0) return;
+    get().duplicateSelectedComponents(position ? { x: 40, y: 40 } : { x: 50, y: 50 });
   },
 
   updateComponentProperties: (id, properties) => {
@@ -837,11 +1324,17 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   saveSelectionAsAssembly: (name, category, description, targetLibraryId) => {
-    const { graph, selectedNodeId, libraries } = get();
+    const { graph, selectedNodeIds, selectedNodeId, libraries } = get();
     let selectedNodes: EngineeringComponent[] = [];
     let selectedConnections: EngineeringConnection[] = [];
 
-    if (selectedNodeId && graph.nodes[selectedNodeId]) {
+    if (selectedNodeIds && selectedNodeIds.length > 0) {
+      const idSet = new Set(selectedNodeIds);
+      selectedNodes = selectedNodeIds.map(id => graph.nodes[id]).filter(Boolean);
+      selectedConnections = Object.values(graph.connections).filter(
+        c => idSet.has(c.sourceComponentId) && idSet.has(c.targetComponentId)
+      );
+    } else if (selectedNodeId && graph.nodes[selectedNodeId]) {
       // Find selected node and all directly connected nodes
       const relatedConns = Object.values(graph.connections).filter(
         c => c.sourceComponentId === selectedNodeId || c.targetComponentId === selectedNodeId
