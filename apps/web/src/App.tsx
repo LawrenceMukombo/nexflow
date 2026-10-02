@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { SplashScreen } from './components/SplashScreen';
 import { ConfigProvider, theme } from 'antd';
 import { TopNav } from './components/TopNav';
 import { Palette } from './components/Palette';
@@ -20,6 +21,9 @@ import { ExportCenterModal } from './components/ExportCenterModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
+  const [splashDone, setSplashDone] = useState(false);
+  const handleSplashDone = useCallback(() => setSplashDone(true), []);
+
   const { 
     isSimulating, 
     simulationSpeed, 
@@ -46,6 +50,8 @@ export const App: React.FC = () => {
   }, [isSimulating, simulationSpeed, tickSimulation]);
 
   return (
+    <>
+      {!splashDone && <SplashScreen onDone={handleSplashDone} duration={4200} />}
     <ConfigProvider
       theme={{
         algorithm: theme.darkAlgorithm,
@@ -100,6 +106,7 @@ export const App: React.FC = () => {
         <ExportCenterModal />
       </div>
     </ConfigProvider>
+    </>
   );
 };
 

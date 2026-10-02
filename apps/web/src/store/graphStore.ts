@@ -50,9 +50,85 @@ export interface DesignRevision {
   graphSnapshot: EngineeringGraph;
 }
 
+/**
+ * Domain membership predicate: checks if an engineering component belongs to the specified domain
+ */
+export function isComponentInDomain(node: EngineeringComponent, domain: EngineeringDomain): boolean {
+  if (domain === 'MULTI_DOMAIN') return true;
+  if (node.domain === 'MULTI_DOMAIN' || node.type === 'RACK_HYPERSCALE_42U') return true;
+  
+  if (domain === 'ELECTRICAL') {
+    return (
+      node.domain === 'ELECTRICAL' || 
+      node.domain === 'SOLAR' || 
+      node.type.includes('TRANSFORMER') || 
+      node.type.includes('GENERATOR') || 
+      node.type.includes('UPS') || 
+      node.type.includes('PDU') || 
+      node.type.includes('ATS') || 
+      node.type.includes('SOLAR') || 
+      node.type.includes('INVERTER') || 
+      node.type.includes('BATTERY')
+    );
+  }
+  
+  if (domain === 'PLUMBING') {
+    return (
+      node.domain === 'PLUMBING' || 
+      node.type.includes('CHILLER') || 
+      node.type.includes('PUMP') || 
+      node.type.includes('CRAH') || 
+      node.type.includes('WATER') || 
+      node.type.includes('TANK') || 
+      node.type.includes('TOWER') || 
+      node.type.includes('COOLING') ||
+      node.type.includes('VALVE')
+    );
+  }
+
+  if (domain === 'SOLAR') {
+    return node.domain === 'SOLAR' || node.type.includes('SOLAR') || node.type.includes('INVERTER');
+  }
+
+  if (domain === 'CCTV') {
+    return (
+      node.domain === 'CCTV' || 
+      node.type.includes('CAM') || 
+      node.type.includes('NVR') || 
+      node.type.includes('ACCESS') ||
+      node.type.includes('SENSOR')
+    );
+  }
+
+  if (domain === 'NETWORK') {
+    const isElec = (
+      node.domain === 'ELECTRICAL' || 
+      node.domain === 'SOLAR' || 
+      node.type.includes('TRANSFORMER') || 
+      node.type.includes('GENERATOR') || 
+      node.type.includes('UPS') || 
+      node.type.includes('PDU') ||
+      node.type.includes('ATS')
+    );
+    const isPlumb = (
+      node.domain === 'PLUMBING' || 
+      node.type.includes('CHILLER') || 
+      node.type.includes('PUMP') || 
+      node.type.includes('CRAH') || 
+      node.type.includes('WATER') ||
+      node.type.includes('TANK')
+    );
+    if (isElec || isPlumb) return false;
+    return node.domain === 'NETWORK' || !node.domain;
+  }
+
+  return node.domain === domain;
+}
+
 export interface GraphState {
   graph: EngineeringGraph;
   activeDomain: EngineeringDomain;
+  domainFilterMode: 'ACTIVE_ONLY' | 'ALL_DOMAINS';
   selectedNodeId: string | null;
   selectedNodeIds: string[];
   copiedNodeIds: string[];
@@ -109,6 +185,13 @@ export interface GraphState {
 
   // Actions
   setActiveDomain: (domain: EngineeringDomain) => void;
+  setDomainFilterMode: (mode: 'ACTIVE_ONLY' | 'ALL_DOMAINS') => void;
+  toggleDomainFilterMode: () => void;
+  clearDomainComponents: (domain?: EngineeringDomain) => void;
+  bulkSetComponentStatus: (status: 'ONLINE' | 'OFFLINE' | 'FAILED', targetIds?: string[]) => void;
+  selectNodesByCondition: (condition: 'ALL' | 'DOMAIN' | 'OFFLINE' | 'FAILED' | 'ROUTERS' | 'SWITCHES' | 'POWER' | 'COOLING') => void;
+  invertSelection: () => void;
+  zoomToFitVisible: () => void;
   selectNode: (id: string | null, additive?: boolean) => void;
   selectConnection: (id: string | null) => void;
   selectNodes: (ids: string[], additive?: boolean) => void;
@@ -123,7 +206,7 @@ export interface GraphState {
   duplicateComponent: (id: string, offset?: { x: number; y: number }) => string;
   duplicateSelectedComponents: (offset?: { x: number; y: number }) => void;
   connectSelectedNodes: (topology: 'star' | 'daisy' | 'mesh', cableType?: string) => void;
-  alignSelectedNodes: (alignment: 'horizontal' | 'vertical' | 'grid') => void;
+  alignSelectedNodes: (alignment: 'horizontal' | 'vertical' | 'grid' | 'alignLeft' | 'alignRight' | 'alignTop' | 'alignBottom' | 'distributeH' | 'distributeV' | 'pipeline') => void;
   copySelectedNodes: () => void;
   pasteCopiedNodes: (position?: { x: number; y: number }) => void;
   openQuickEditModal: (nodeId: string) => void;
@@ -341,6 +424,7 @@ const initialProjects = getStoredProjects();
 export const useGraphStore = create<GraphState>((set, get) => ({
   graph: initialProjects[0]?.graph || initialGraph,
   activeDomain: 'NETWORK',
+  domainFilterMode: 'ACTIVE_ONLY',
   selectedNodeId: null,
   selectedNodeIds: [],
   copiedNodeIds: [],
@@ -419,7 +503,178 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   history: [JSON.stringify(initialGraph)],
   historyIndex: 0,
 
-  setActiveDomain: (domain) => set({ activeDomain: domain }),
+  setActiveDomain: (domain) => {
+    const { graph, selectedNodeIds } = get();
+    // Filter selection so we don't retain hidden selected nodes
+    const validSelectedIds = selectedNodeIds.filter(id => {
+      const node = graph.nodes[id];
+      return node && isComponentInDomain(node, domain);
+    });
+
+    set({
+      activeDomain: domain,
+      selectedNodeIds: validSelectedIds,
+      selectedNodeId: validSelectedIds.length === 1 ? validSelectedIds[0] : null
+    });
+  },
+
+  setDomainFilterMode: (mode) => set({ domainFilterMode: mode }),
+  toggleDomainFilterMode: () => set((state) => ({
+    domainFilterMode: state.domainFilterMode === 'ACTIVE_ONLY' ? 'ALL_DOMAINS' : 'ACTIVE_ONLY'
+  })),
+
+  clearDomainComponents: (domain) => {
+    const targetDomain = domain || get().activeDomain;
+    const { graph } = get();
+    const remainingNodes: Record<string, EngineeringComponent> = {};
+    const removedNodeIds = new Set<string>();
+
+    Object.values(graph.nodes).forEach(node => {
+      if (isComponentInDomain(node, targetDomain)) {
+        removedNodeIds.add(node.id);
+      } else {
+        remainingNodes[node.id] = node;
+      }
+    });
+
+    const remainingConns: Record<string, EngineeringConnection> = {};
+    Object.values(graph.connections).forEach(c => {
+      if (!removedNodeIds.has(c.sourceComponentId) && !removedNodeIds.has(c.targetComponentId)) {
+        remainingConns[c.id] = c;
+      }
+    });
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: remainingNodes,
+      connections: remainingConns,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      selectedNodeId: null,
+      selectedNodeIds: [],
+      selectedConnectionId: null,
+      activePackets: [],
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+    get().validate();
+  },
+
+  bulkSetComponentStatus: (status, targetIds) => {
+    const { graph, selectedNodeIds, activeDomain, domainFilterMode } = get();
+    const ids = targetIds && targetIds.length > 0 
+      ? targetIds 
+      : selectedNodeIds.length > 0 
+        ? selectedNodeIds 
+        : Object.values(graph.nodes)
+            .filter(node => domainFilterMode === 'ALL_DOMAINS' || isComponentInDomain(node, activeDomain))
+            .map(n => n.id);
+
+    if (ids.length === 0) return;
+
+    const updatedNodes = { ...graph.nodes };
+    ids.forEach(id => {
+      const node = updatedNodes[id];
+      if (node) {
+        updatedNodes[id] = {
+          ...node,
+          simulationState: {
+            ...node.simulationState,
+            status,
+            isFailed: status === 'FAILED' || status === 'OFFLINE'
+          }
+        };
+      }
+    });
+
+    const updatedGraph: EngineeringGraph = {
+      ...graph,
+      nodes: updatedNodes,
+      metadata: { ...graph.metadata, updatedAt: new Date().toISOString() }
+    };
+
+    set((state) => ({
+      graph: updatedGraph,
+      ...pushSnapshot({ ...state, graph: updatedGraph })
+    }));
+    get().validate();
+  },
+
+  selectNodesByCondition: (condition) => {
+    const { graph, activeDomain, domainFilterMode } = get();
+    const visibleNodes = Object.values(graph.nodes).filter(node => 
+      domainFilterMode === 'ALL_DOMAINS' || isComponentInDomain(node, activeDomain)
+    );
+
+    let matched: EngineeringComponent[] = [];
+    if (condition === 'ALL') {
+      matched = visibleNodes;
+    } else if (condition === 'DOMAIN') {
+      matched = Object.values(graph.nodes).filter(n => isComponentInDomain(n, activeDomain));
+    } else if (condition === 'OFFLINE' || condition === 'FAILED') {
+      matched = visibleNodes.filter(n => n.simulationState.isFailed || n.simulationState.status === 'FAILED' || n.simulationState.status === 'OFFLINE');
+    } else if (condition === 'ROUTERS') {
+      matched = visibleNodes.filter(n => n.type.includes('ROUTER') || n.type.includes('GATEWAY') || n.type.includes('FIREWALL'));
+    } else if (condition === 'SWITCHES') {
+      matched = visibleNodes.filter(n => n.type.includes('SWITCH') || n.type.includes('HUB') || n.type.includes('PDU'));
+    } else if (condition === 'POWER') {
+      matched = visibleNodes.filter(n => isComponentInDomain(n, 'ELECTRICAL') || isComponentInDomain(n, 'SOLAR'));
+    } else if (condition === 'COOLING') {
+      matched = visibleNodes.filter(n => isComponentInDomain(n, 'PLUMBING'));
+    }
+
+    const ids = matched.map(n => n.id);
+    set({
+      selectedNodeIds: ids,
+      selectedNodeId: ids.length === 1 ? ids[0] : null
+    });
+  },
+
+  invertSelection: () => {
+    const { graph, selectedNodeIds, activeDomain, domainFilterMode } = get();
+    const visibleNodes = Object.values(graph.nodes).filter(node => 
+      domainFilterMode === 'ALL_DOMAINS' || isComponentInDomain(node, activeDomain)
+    );
+    const selectedSet = new Set(selectedNodeIds);
+    const inverted = visibleNodes.filter(n => !selectedSet.has(n.id)).map(n => n.id);
+    set({
+      selectedNodeIds: inverted,
+      selectedNodeId: inverted.length === 1 ? inverted[0] : null
+    });
+  },
+
+  zoomToFitVisible: () => {
+    const { graph, activeDomain, domainFilterMode } = get();
+    const visibleNodes = Object.values(graph.nodes).filter(node => 
+      domainFilterMode === 'ALL_DOMAINS' || isComponentInDomain(node, activeDomain)
+    );
+    if (visibleNodes.length === 0) {
+      set({ viewport: { x: 50, y: 50, zoom: 0.9 } });
+      return;
+    }
+
+    const minX = Math.min(...visibleNodes.map(n => n.position.x));
+    const maxX = Math.max(...visibleNodes.map(n => n.position.x + (n.dimensions?.width || 180)));
+    const minY = Math.min(...visibleNodes.map(n => n.position.y));
+    const maxY = Math.max(...visibleNodes.map(n => n.position.y + (n.dimensions?.height || 110)));
+
+    const width = maxX - minX + 160;
+    const height = maxY - minY + 160;
+
+    const vpW = typeof window !== 'undefined' ? window.innerWidth - 300 - 320 : 1000;
+    const vpH = typeof window !== 'undefined' ? window.innerHeight - 52 - 28 : 700;
+
+    const zoom = Math.min(1.2, Math.max(0.4, Math.min(vpW / width, vpH / height)));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const targetX = Math.round(vpW / 2 - centerX * zoom);
+    const targetY = Math.round(vpH / 2 - centerY * zoom);
+
+    set({ viewport: { x: targetX, y: targetY, zoom } });
+  },
 
   selectNode: (id, additive = false) => {
     set((state) => {
@@ -915,26 +1170,77 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   },
 
   alignSelectedNodes: (alignment) => {
-    const { graph, selectedNodeIds } = get();
-    if (selectedNodeIds.length < 2) return;
-    const nodes = selectedNodeIds.map(id => graph.nodes[id]).filter(Boolean);
+    const { graph, selectedNodeIds, activeDomain, domainFilterMode } = get();
+    let nodesToAlign = selectedNodeIds.map(id => graph.nodes[id]).filter(Boolean);
+    if (nodesToAlign.length < 2) {
+      nodesToAlign = Object.values(graph.nodes).filter(node => 
+        domainFilterMode === 'ALL_DOMAINS' || isComponentInDomain(node, activeDomain)
+      );
+    }
+    if (nodesToAlign.length < 2) return;
     const updatedNodes = { ...graph.nodes };
 
     if (alignment === 'horizontal') {
-      const avgY = Math.round(nodes.reduce((acc, n) => acc + n.position.y, 0) / nodes.length);
-      nodes.forEach(n => {
+      const avgY = Math.round(nodesToAlign.reduce((acc, n) => acc + n.position.y, 0) / nodesToAlign.length);
+      nodesToAlign.forEach(n => {
         updatedNodes[n.id] = { ...n, position: { ...n.position, y: avgY } };
       });
     } else if (alignment === 'vertical') {
-      const avgX = Math.round(nodes.reduce((acc, n) => acc + n.position.x, 0) / nodes.length);
-      nodes.forEach(n => {
+      const avgX = Math.round(nodesToAlign.reduce((acc, n) => acc + n.position.x, 0) / nodesToAlign.length);
+      nodesToAlign.forEach(n => {
         updatedNodes[n.id] = { ...n, position: { ...n.position, x: avgX } };
       });
+    } else if (alignment === 'alignLeft') {
+      const minX = Math.min(...nodesToAlign.map(n => n.position.x));
+      nodesToAlign.forEach(n => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, x: minX } };
+      });
+    } else if (alignment === 'alignRight') {
+      const maxX = Math.max(...nodesToAlign.map(n => n.position.x));
+      nodesToAlign.forEach(n => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, x: maxX } };
+      });
+    } else if (alignment === 'alignTop') {
+      const minY = Math.min(...nodesToAlign.map(n => n.position.y));
+      nodesToAlign.forEach(n => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, y: minY } };
+      });
+    } else if (alignment === 'alignBottom') {
+      const maxY = Math.max(...nodesToAlign.map(n => n.position.y));
+      nodesToAlign.forEach(n => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, y: maxY } };
+      });
+    } else if (alignment === 'distributeH') {
+      const sorted = [...nodesToAlign].sort((a, b) => a.position.x - b.position.x);
+      const minX = sorted[0].position.x;
+      const maxX = sorted[sorted.length - 1].position.x;
+      const step = (maxX - minX) / (sorted.length - 1 || 1);
+      sorted.forEach((n, i) => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, x: Math.round(minX + i * step) } };
+      });
+    } else if (alignment === 'distributeV') {
+      const sorted = [...nodesToAlign].sort((a, b) => a.position.y - b.position.y);
+      const minY = sorted[0].position.y;
+      const maxY = sorted[sorted.length - 1].position.y;
+      const step = (maxY - minY) / (sorted.length - 1 || 1);
+      sorted.forEach((n, i) => {
+        updatedNodes[n.id] = { ...n, position: { ...n.position, y: Math.round(minY + i * step) } };
+      });
+    } else if (alignment === 'pipeline') {
+      const sorted = [...nodesToAlign].sort((a, b) => a.position.x - b.position.x);
+      const startX = Math.min(...nodesToAlign.map(n => n.position.x));
+      const centerY = Math.round(nodesToAlign.reduce((acc, n) => acc + n.position.y, 0) / nodesToAlign.length);
+      sorted.forEach((n, i) => {
+        updatedNodes[n.id] = {
+          ...n,
+          position: { x: startX + i * 260, y: centerY }
+        };
+      });
     } else if (alignment === 'grid') {
-      const minX = Math.min(...nodes.map(n => n.position.x));
-      const minY = Math.min(...nodes.map(n => n.position.y));
-      const cols = Math.ceil(Math.sqrt(nodes.length));
-      nodes.forEach((n, i) => {
+      const minX = Math.min(...nodesToAlign.map(n => n.position.x));
+      const minY = Math.min(...nodesToAlign.map(n => n.position.y));
+      const cols = Math.ceil(Math.sqrt(nodesToAlign.length));
+      nodesToAlign.forEach((n, i) => {
         const col = i % cols;
         const row = Math.floor(i / cols);
         updatedNodes[n.id] = {

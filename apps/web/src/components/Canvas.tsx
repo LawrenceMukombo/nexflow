@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { useGraphStore } from '../store/graphStore';
+import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { Tag, Badge, message, Dropdown, MenuProps, Button } from 'antd';
 import { 
   PlusOutlined,
@@ -90,8 +90,17 @@ export const Canvas: React.FC = () => {
     loadSystemDesign,
     injectFaultOrSurge,
     autoLayout,
-    triggerPacketBurst
+    triggerPacketBurst,
+    activeDomain,
+    domainFilterMode
   } = useGraphStore();
+
+  const isNodeVisible = useCallback((node: EngineeringComponent) => {
+    if (domainFilterMode === 'ALL_DOMAINS') return true;
+    return isComponentInDomain(node, activeDomain);
+  }, [domainFilterMode, activeDomain]);
+
+  const visibleNodes = Object.values(graph.nodes).filter(isNodeVisible);
 
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -249,7 +258,7 @@ export const Canvas: React.FC = () => {
       const canvasMinY = (minY - viewport.y) / viewport.zoom;
       const canvasMaxY = (maxY - viewport.y) / viewport.zoom;
 
-      const intersectedIds = Object.values(graph.nodes).filter(node => {
+      const intersectedIds = visibleNodes.filter(node => {
         const nodeRight = node.position.x + 210;
         const nodeBottom = node.position.y + 140;
         return (
@@ -1261,7 +1270,7 @@ export const Canvas: React.FC = () => {
           {Object.values(graph.connections).map((conn) => {
             const srcNode = graph.nodes[conn.sourceComponentId];
             const tgtNode = graph.nodes[conn.targetComponentId];
-            if (!srcNode || !tgtNode) return null;
+            if (!srcNode || !tgtNode || !isNodeVisible(srcNode) || !isNodeVisible(tgtNode)) return null;
 
             const srcPort = srcNode.ports.find((p) => p.id === conn.sourcePortId);
             const tgtPort = tgtNode.ports.find((p) => p.id === conn.targetPortId);
@@ -1452,7 +1461,7 @@ export const Canvas: React.FC = () => {
 
             const srcNode = graph.nodes[conn.sourceComponentId];
             const tgtNode = graph.nodes[conn.targetComponentId];
-            if (!srcNode || !tgtNode) return null;
+            if (!srcNode || !tgtNode || !isNodeVisible(srcNode) || !isNodeVisible(tgtNode)) return null;
 
             const srcPort = srcNode.ports.find((p) => p.id === conn.sourcePortId);
             const tgtPort = tgtNode.ports.find((p) => p.id === conn.targetPortId);
@@ -1564,7 +1573,7 @@ export const Canvas: React.FC = () => {
         </svg>
 
         {/* Engineering Component Nodes Layer */}
-        {Object.values(graph.nodes).map((node) => {
+        {Object.values(graph.nodes).filter(isNodeVisible).map((node) => {
           const isSelected = (selectedNodeIds && selectedNodeIds.includes(node.id)) || selectedNodeId === node.id;
           const isFailed = node.simulationState.isFailed;
 

@@ -24,11 +24,14 @@ import {
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
 import { NexFlowBrandIcon } from './ComponentIcon';
+import { CanvasManipulatorMenu } from './CanvasManipulatorMenu';
 
 export const TopNav: React.FC = () => {
   const {
     activeDomain,
     setActiveDomain,
+    domainFilterMode,
+    toggleDomainFilterMode,
     validationIssues,
     toggleValidationDrawer,
     toggleBOQModal,
@@ -92,18 +95,36 @@ export const TopNav: React.FC = () => {
 
         <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
 
-        {/* Domain Selector */}
-        <Select<EngineeringDomain>
-          value={activeDomain}
-          onChange={(val) => setActiveDomain(val)}
-          style={{ width: 130 }}
-          size="small"
-          options={[
-            { label: '🌐 Network', value: 'NETWORK' },
-            { label: '⚡ Electrical', value: 'ELECTRICAL' },
-            { label: '💧 Plumbing', value: 'PLUMBING' }
-          ]}
-        />
+        {/* Domain Selector & Workspace Isolation */}
+        <Space size={6}>
+          <Select<EngineeringDomain>
+            value={activeDomain}
+            onChange={(val) => {
+              setActiveDomain(val);
+              message.info(`Switched active domain to ${val}. Canvas isolated.`);
+            }}
+            style={{ width: 145 }}
+            size="small"
+            options={[
+              { label: '🌐 Network', value: 'NETWORK' },
+              { label: '⚡ Electrical', value: 'ELECTRICAL' },
+              { label: '💧 Plumbing', value: 'PLUMBING' },
+              { label: '☀️ Solar Power', value: 'SOLAR' },
+              { label: '🛡️ CCTV & Sec', value: 'CCTV' },
+              { label: '🏢 All Domains', value: 'MULTI_DOMAIN' }
+            ]}
+          />
+
+          <Tooltip title={domainFilterMode === 'ACTIVE_ONLY' ? 'Active Domain Isolated: components from other domains are hidden to allow room for this domain. Click to show all domains.' : 'All Domains Visible (Overlay): click to isolate active domain only.'}>
+            <Tag
+              color={domainFilterMode === 'ACTIVE_ONLY' ? '#0284c7' : '#7c3aed'}
+              style={{ cursor: 'pointer', margin: 0, padding: '1px 7px', fontSize: 11, borderRadius: 4, fontWeight: 600 }}
+              onClick={toggleDomainFilterMode}
+            >
+              {domainFilterMode === 'ACTIVE_ONLY' ? '🔒 Isolated' : '🌐 Overlay'}
+            </Tag>
+          </Tooltip>
+        </Space>
 
         <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
 
@@ -177,6 +198,9 @@ export const TopNav: React.FC = () => {
         </Space>
 
         <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
+
+        {/* Canvas Manipulation & Component Menu */}
+        <CanvasManipulatorMenu />
 
         {/* System Topology Wizard */}
         <Button
