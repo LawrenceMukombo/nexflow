@@ -138,8 +138,11 @@ export const ComponentIcon: React.FC<ComponentIconProps> = ({ type, domain, size
   if (type.includes('PDU')) {
     return <DashboardOutlined style={{ color: '#eab308', ...s }} />;
   }
-  if (type.includes('SOLAR')) {
+  if (type.includes('SOLAR') || type.includes('INVERTER')) {
     return <ThunderboltOutlined style={{ color: '#10b981', ...s }} />;
+  }
+  if (type.includes('BESS') || type.includes('BATTERY')) {
+    return <ThunderboltOutlined style={{ color: '#06b6d4', ...s }} />;
   }
 
   // 11. Plumbing & Cooling Domain
@@ -171,7 +174,7 @@ export const ComponentIcon: React.FC<ComponentIconProps> = ({ type, domain, size
       </span>
     );
   }
-  if (type.includes('CRAC') || type.includes('CRAH')) {
+  if (type.includes('CRAC') || type.includes('CRAH') || type.includes('CRV')) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size, height: size, color: '#0284c7', ...s }}>
         💨

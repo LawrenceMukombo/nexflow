@@ -5,3 +5,4 @@ export * from './simulation';
 export * from './boq';
 export * from './wizard';
 export * from './libraries';
+export * from './enterpriseCatalog';

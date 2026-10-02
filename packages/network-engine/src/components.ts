@@ -4,6 +4,7 @@ import {
   PortBlueprint, 
   ComponentTemplate 
 } from '@omniflow/shared-types';
+import { ENTERPRISE_COMPONENT_CATALOG } from './enterpriseCatalog';
 
 export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
   ISP_FEED: {
@@ -1469,7 +1470,8 @@ export const NETWORK_COMPONENT_CATALOG: Record<string, ComponentTemplate> = {
       { name: 'COOL_CHW_IN', type: 'PIPE_THREAD_2IN', direction: 'input', capacity: 15, unit: 'L/s', compatiblePortTypes: ['PIPE_THREAD_2IN', 'PIPE_FLANGE_6IN'] },
       { name: 'COOL_CHW_OUT', type: 'PIPE_THREAD_2IN', direction: 'output', capacity: 15, unit: 'L/s', compatiblePortTypes: ['PIPE_THREAD_2IN', 'PIPE_FLANGE_6IN'] }
     ]
-  }
+  },
+  ...ENTERPRISE_COMPONENT_CATALOG
 };
 
 let tagCounter: Record<string, number> = {};

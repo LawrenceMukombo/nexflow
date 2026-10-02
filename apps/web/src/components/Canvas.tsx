@@ -1378,87 +1378,103 @@ export const Canvas: React.FC = () => {
                   });
                 }}
               >
-                {/* Hit test wider stroke */}
+                {/* Hit test wider stroke for effortless clicking */}
                 <path
                   d={pathData}
                   fill="none"
                   stroke="transparent"
-                  strokeWidth={24}
+                  strokeWidth={28}
                 />
 
-                {/* Ambient Glow / Halo Path */}
+                {/* 1. Outer Dark Drop Shadow / Isolation Border */}
                 <path
                   d={pathData}
                   fill="none"
-                  stroke={cableColor}
-                  strokeWidth={isSelected ? 10 : isFluid ? 9 : 7}
-                  strokeOpacity={isIpBlocked ? 0.4 : 0.25}
+                  stroke="#050811"
+                  strokeWidth={isSelected ? 14 : isFluid ? 12 : 9}
                   strokeLinecap="round"
                 />
 
-                {/* Primary Physical Cable/Pipe Path */}
+                {/* 2. Ambient Physical Cable Sheath / Jacket */}
                 <path
                   d={pathData}
                   fill="none"
                   stroke={cableColor}
-                  strokeWidth={isSelected ? 4 : isFluid ? 4 : 2.8}
-                  strokeDasharray={isFailed || isIpBlocked ? '6,4' : undefined}
+                  strokeWidth={isSelected ? 10 : isFluid ? 8 : 6.5}
+                  strokeOpacity={isIpBlocked ? 0.35 : isSelected ? 0.9 : 0.85}
+                  strokeLinecap="round"
+                />
+
+                {/* 3. Primary Inner Core / Conductor Stripe */}
+                <path
+                  d={pathData}
+                  fill="none"
+                  stroke={isSelected ? '#ffffff' : isIpBlocked ? '#ef4444' : cableColor}
+                  strokeWidth={isSelected ? 5 : isFluid ? 4.5 : 3.5}
+                  strokeDasharray={isFailed || isIpBlocked ? '8,6' : undefined}
                   strokeLinecap="round"
                   style={{ transition: 'stroke 0.2s, stroke-width 0.2s' }}
                 />
 
-                {/* Dynamic Flowing Stream Animation Line (Active Flow Simulation) */}
+                {/* 4. Active Flow Stream Indicator (Multi-Domain Live Data / Fluid / Power) */}
                 {isFlowAllowed && (
                   <path
                     d={pathData}
                     fill="none"
                     stroke={flowColor}
-                    strokeWidth={isFluid ? 2.5 : isElectrical ? 2.2 : 1.8}
-                    strokeDasharray={isElectrical ? '6, 14' : isFluid ? '14, 8' : '8, 12'}
+                    strokeWidth={isFluid ? 3.5 : isElectrical ? 3 : 2.5}
+                    strokeDasharray={isElectrical ? '8, 16' : isFluid ? '16, 10' : '10, 14'}
                     strokeLinecap="round"
                     className={flowClass}
-                    opacity={0.9}
+                    opacity={1}
                   />
                 )}
 
-                {/* Directional Flow Chevron Markers along path */}
+                {/* 5. Directional Flow Pointers along the cable */}
                 {isFlowAllowed && (
                   <>
-                    <circle cx={(start.x * 0.75 + end.x * 0.25)} cy={(start.y * 0.75 + end.y * 0.25)} r={2} fill={flowColor} opacity={0.7} />
-                    <circle cx={(start.x * 0.25 + end.x * 0.75)} cy={(start.y * 0.25 + end.y * 0.75)} r={2} fill={flowColor} opacity={0.7} />
+                    <circle cx={(start.x * 0.7 + end.x * 0.3)} cy={(start.y * 0.7 + end.y * 0.3)} r={3} fill={flowColor} opacity={0.9} />
+                    <circle cx={(start.x * 0.3 + end.x * 0.7)} cy={(start.y * 0.3 + end.y * 0.7)} r={3} fill={flowColor} opacity={0.9} />
                   </>
                 )}
 
-                {/* Terminal Connector Plugs */}
-                <circle cx={start.x} cy={start.y} r={isFluid ? 5.5 : 4.5} fill={cableColor} stroke="#090d16" strokeWidth={1.5} />
-                <circle cx={end.x} cy={end.y} r={isFluid ? 5.5 : 4.5} fill={cableColor} stroke="#090d16" strokeWidth={1.5} />
+                {/* 6. Hardware Booted Connector Plugs (RJ45 / Fiber LC / Flange Terminal) */}
+                {/* Source Port Boot & Pin */}
+                <circle cx={start.x} cy={start.y} r={isFluid ? 7.5 : 6} fill="#090d16" stroke={cableColor} strokeWidth={2} />
+                <circle cx={start.x} cy={start.y} r={isFluid ? 4 : 2.5} fill={isElectrical ? '#facc15' : isFluid ? '#38bdf8' : '#ffffff'} />
 
-                {/* High-Contrast Cable Type & Length Badge Pill */}
-                <g transform={`translate(${midX}, ${midY - 10})`}>
+                {/* Target Port Boot & Pin */}
+                <circle cx={end.x} cy={end.y} r={isFluid ? 7.5 : 6} fill="#090d16" stroke={cableColor} strokeWidth={2} />
+                <circle cx={end.x} cy={end.y} r={isFluid ? 4 : 2.5} fill={isElectrical ? '#facc15' : isFluid ? '#38bdf8' : '#ffffff'} />
+
+                {/* 7. High-Visibility Cable Specification Badge Pill */}
+                <g transform={`translate(${midX}, ${midY - 12})`}>
                   <rect
-                    x={isIpBlocked ? -65 : -52}
-                    y={-10}
-                    width={isIpBlocked ? 130 : 104}
-                    height={20}
-                    rx={10}
-                    fill="#0b111e"
-                    stroke={cableColor}
-                    strokeWidth={1.2}
+                    x={isIpBlocked ? -75 : -60}
+                    y={-11}
+                    width={isIpBlocked ? 150 : 120}
+                    height={22}
+                    rx={11}
+                    fill="#080d19"
+                    stroke={isSelected ? '#38bdf8' : cableColor}
+                    strokeWidth={isSelected ? 2 : 1.4}
+                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.7))"
                   />
                   <text
                     x={0}
                     y={4}
-                    fill={isIpBlocked ? '#fca5a5' : '#f8fafc'}
-                    fontSize="9.5"
-                    fontWeight="600"
-                    fontFamily="monospace"
+                    fill={isIpBlocked ? '#fca5a5' : isSelected ? '#38bdf8' : '#f8fafc'}
+                    fontSize="10"
+                    fontWeight="700"
+                    fontFamily="'Consolas', 'Segoe UI', monospace"
+                    letterSpacing="0.2px"
                     textAnchor="middle"
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
                     {isIpBlocked ? (
                       '⛔ LINK DOWN (WRONG IP)'
                     ) : (
-                      `${isElectrical ? '⚡ ' : isFluid ? '💧 ' : isVideo ? '📹 ' : ''}${conn.connectionType.replace('POWER_', '').replace('PIPE_', '')} • ${conn.lengthMeters}m`
+                      `${isElectrical ? '⚡ ' : isFluid ? '💧 ' : isVideo ? '📹 ' : '🌐 '}${conn.connectionType.replace('POWER_', '').replace('PIPE_', '')} • ${conn.lengthMeters}m`
                     )}
                   </text>
                 </g>
