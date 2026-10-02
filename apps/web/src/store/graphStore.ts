@@ -37,6 +37,19 @@ import {
 } from '@omniflow/network-engine';
 import { createDemoSmallOfficeGraph } from '../seed/demoTopology';
 
+export interface DesignRevision {
+  id: string;
+  version: string;
+  timestamp: string;
+  author: string;
+  status: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED';
+  summary: string;
+  nodeCount: number;
+  connectionCount: number;
+  totalCost: number;
+  graphSnapshot: EngineeringGraph;
+}
+
 export interface GraphState {
   graph: EngineeringGraph;
   activeDomain: EngineeringDomain;
@@ -62,6 +75,17 @@ export interface GraphState {
   isQuickEditModalOpen: boolean;
   quickEditNodeId: string | null;
 
+  // Milestone 3: Engineering Delivery & Governance Modals
+  isDesignReportModalOpen: boolean;
+  isVersionDiffModalOpen: boolean;
+  isExportCenterModalOpen: boolean;
+  engineeringStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED';
+  designRevisions: DesignRevision[];
+
+  // Flow Visualisation & Pacing Tuning
+  showPacketLabels: boolean;
+  flowDensity: 'CALM' | 'BALANCED' | 'HIGH';
+
   // Projects Management
   currentProjectId: string;
   currentProjectName: string;
@@ -74,7 +98,7 @@ export interface GraphState {
   
   // Simulation
   isSimulating: boolean;
-  simulationSpeed: number; // 1, 2, 5
+  simulationSpeed: number; // 0.25, 0.5, 1, 2
   simulationTick: number;
   activePackets: SimulationPacket[];
   telemetry: SimulationTelemetry;
@@ -148,6 +172,21 @@ export interface GraphState {
   exportProjectToFile: (projectId: string) => void;
   setCurrentProjectName: (name: string) => void;
   createNewBlankProject: (name?: string) => void;
+
+  // Milestone 3: Engineering Delivery Actions
+  openDesignReportModal: () => void;
+  closeDesignReportModal: () => void;
+  openVersionDiffModal: () => void;
+  closeVersionDiffModal: () => void;
+  openExportCenterModal: () => void;
+  closeExportCenterModal: () => void;
+  setEngineeringStatus: (status: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED') => void;
+  createDesignRevision: (version: string, summary: string, author?: string) => void;
+  revertToRevision: (revisionId: string) => void;
+
+  // Flow Tuning Actions
+  setShowPacketLabels: (show: boolean) => void;
+  setFlowDensity: (density: 'CALM' | 'BALANCED' | 'HIGH') => void;
 
   // Domain Flow Filters & Controls
   showDataFlow: boolean;
@@ -321,6 +360,42 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isQuickEditModalOpen: false,
   quickEditNodeId: null,
 
+  // Milestone 3: Engineering Delivery & Governance Modals
+  isDesignReportModalOpen: false,
+  isVersionDiffModalOpen: false,
+  isExportCenterModalOpen: false,
+  engineeringStatus: 'DRAFT',
+  designRevisions: [
+    {
+      id: 'rev_v1_0',
+      version: 'v1.0',
+      timestamp: '2026-09-28 09:30:00',
+      author: 'Lead Architect M. Chen',
+      status: 'APPROVED',
+      summary: 'Initial core backbone routing & perimeter firewall baseline.',
+      nodeCount: 6,
+      connectionCount: 5,
+      totalCost: 18450,
+      graphSnapshot: createDemoSmallOfficeGraph()
+    },
+    {
+      id: 'rev_v1_1',
+      version: 'v1.1',
+      timestamp: '2026-10-01 14:15:00',
+      author: 'Senior Systems Engineer D. Ross',
+      status: 'IN_REVIEW',
+      summary: 'Added PoE edge access switches, wireless access points & VoIP endpoints.',
+      nodeCount: 11,
+      connectionCount: 10,
+      totalCost: 32680,
+      graphSnapshot: initialProjects[0]?.graph || initialGraph
+    }
+  ],
+
+  // Flow Visualisation & Pacing Tuning
+  showPacketLabels: false,
+  flowDensity: 'CALM',
+
   currentProjectId: initialProjects[0]?.id || 'proj_default',
   currentProjectName: initialProjects[0]?.name || 'Corporate HQ Network Blueprint',
   savedProjects: initialProjects,
@@ -330,7 +405,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   activeLibraryId: 'lib_cisco_enterprise',
 
   isSimulating: true, // Default to true so flowing packets, electrical current, and fluids are immediately visible!
-  simulationSpeed: 1,
+  simulationSpeed: 0.5, // Calm, smooth default visual flow speed
   simulationTick: 0,
   activePackets: [],
   telemetry: initialTelemetry,
@@ -1499,6 +1574,58 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       isSimulating: running !== undefined ? running : !state.isSimulating
     }));
   },
+
+  // Milestone 3: Engineering Delivery Actions
+  openDesignReportModal: () => set({ isDesignReportModalOpen: true }),
+  closeDesignReportModal: () => set({ isDesignReportModalOpen: false }),
+  openVersionDiffModal: () => set({ isVersionDiffModalOpen: true }),
+  closeVersionDiffModal: () => set({ isVersionDiffModalOpen: false }),
+  openExportCenterModal: () => set({ isExportCenterModalOpen: true }),
+  closeExportCenterModal: () => set({ isExportCenterModalOpen: false }),
+  setEngineeringStatus: (status) => set({ engineeringStatus: status }),
+  createDesignRevision: (version, summary, author = 'Design Engineer') => {
+    const { graph, designRevisions } = get();
+    const nodeCount = Object.keys(graph.nodes).length;
+    const connectionCount = Object.keys(graph.connections).length;
+    let totalCost = 0;
+    for (const node of Object.values(graph.nodes)) {
+      totalCost += Number(node.costData?.unitCost || 500);
+    }
+    for (const conn of Object.values(graph.connections)) {
+      const cableCostPerMeter = CABLE_CATALOG[conn.connectionType]?.costPerMeter || 2.5;
+      totalCost += Math.round(conn.lengthMeters * cableCostPerMeter);
+    }
+    const newRev: DesignRevision = {
+      id: `rev_${Date.now()}`,
+      version,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      author,
+      status: 'IN_REVIEW',
+      summary,
+      nodeCount,
+      connectionCount,
+      totalCost,
+      graphSnapshot: JSON.parse(JSON.stringify(graph))
+    };
+    set({ designRevisions: [newRev, ...designRevisions] });
+  },
+  revertToRevision: (revisionId) => {
+    const { designRevisions } = get();
+    const rev = designRevisions.find((r) => r.id === revisionId);
+    if (rev) {
+      set({
+        graph: JSON.parse(JSON.stringify(rev.graphSnapshot)),
+        selectedNodeId: null,
+        selectedNodeIds: [],
+        selectedConnectionId: null,
+        engineeringStatus: rev.status
+      });
+    }
+  },
+
+  // Flow Tuning Actions
+  setShowPacketLabels: (show) => set({ showPacketLabels: show }),
+  setFlowDensity: (density) => set({ flowDensity: density }),
 
   setSimulationSpeed: (speed) => set({ simulationSpeed: speed }),
 

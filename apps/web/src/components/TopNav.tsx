@@ -10,21 +10,22 @@ import {
   UndoOutlined, 
   RedoOutlined, 
   ClearOutlined, 
-  DownloadOutlined, 
   ThunderboltFilled,
   BranchesOutlined,
   BuildOutlined,
   PartitionOutlined,
   BookOutlined,
   SaveOutlined,
-  FolderOpenOutlined
+  FolderOpenOutlined,
+  FilePdfOutlined,
+  HistoryOutlined,
+  ExportOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
 
 export const TopNav: React.FC = () => {
   const {
-    graph,
     activeDomain,
     setActiveDomain,
     validationIssues,
@@ -35,6 +36,11 @@ export const TopNav: React.FC = () => {
     toggleLibraryModal,
     toggleSaveAssemblyModal,
     toggleProjectsModal,
+    openDesignReportModal,
+    openVersionDiffModal,
+    openExportCenterModal,
+    engineeringStatus,
+    setEngineeringStatus,
     savedProjects,
     currentProjectName,
     isProjectDirty,
@@ -55,15 +61,6 @@ export const TopNav: React.FC = () => {
   } = useGraphStore();
 
   const errorCount = validationIssues.filter((i) => i.severity === 'CRITICAL' || i.severity === 'ERROR').length;
-
-  const handleExportJSON = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(graph, null, 2));
-    const dlAnchor = document.createElement('a');
-    dlAnchor.setAttribute('href', dataStr);
-    dlAnchor.setAttribute('download', `${graph.name.toLowerCase().replace(/\s+/g, '_')}_v1.0.json`);
-    dlAnchor.click();
-    message.success('Exported engineering graph schema (JSON)');
-  };
 
   return (
     <div
@@ -345,14 +342,31 @@ export const TopNav: React.FC = () => {
           <Select
             value={simulationSpeed}
             onChange={(s) => setSimulationSpeed(s)}
-            style={{ width: 70 }}
+            style={{ width: 78 }}
             options={[
+              { label: '0.25x', value: 0.25 },
+              { label: '0.5x', value: 0.5 },
               { label: '1x', value: 1 },
-              { label: '2x', value: 2 },
-              { label: '5x', value: 5 }
+              { label: '2x', value: 2 }
             ]}
           />
         </Space.Compact>
+
+        {/* Engineering Governance Status Tag */}
+        <Select
+          value={engineeringStatus}
+          onChange={(s) => {
+            setEngineeringStatus(s);
+            message.success(`Design status set to ${s}`);
+          }}
+          style={{ width: 105 }}
+          options={[
+            { label: '⚪ Draft', value: 'DRAFT' },
+            { label: '🟡 In Review', value: 'IN_REVIEW' },
+            { label: '🟢 Approved', value: 'APPROVED' },
+            { label: '🔒 Locked', value: 'LOCKED' }
+          ]}
+        />
 
         {/* Engineering Validation Badge & Button */}
         <Badge count={errorCount} offset={[-4, 4]}>
@@ -369,6 +383,26 @@ export const TopNav: React.FC = () => {
           </Button>
         </Badge>
 
+        {/* Milestone 3: Engineering Design Report */}
+        <Button
+          icon={<FilePdfOutlined style={{ color: '#0284c7' }} />}
+          onClick={openDesignReportModal}
+          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500 }}
+          title="Generate client-ready engineering design PDF specification report"
+        >
+          Report
+        </Button>
+
+        {/* Milestone 3: Revisions & Diff Tool */}
+        <Button
+          icon={<HistoryOutlined style={{ color: '#f59e0b' }} />}
+          onClick={openVersionDiffModal}
+          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500 }}
+          title="Compare design revisions side-by-side with variance tracking"
+        >
+          Revisions
+        </Button>
+
         {/* Bill of Quantities Modal */}
         <Button
           icon={<DollarOutlined style={{ color: '#10b981' }} />}
@@ -384,16 +418,16 @@ export const TopNav: React.FC = () => {
           onClick={() => toggleCableScheduleModal(true)}
           style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
         >
-          Cable Schedule
+          Cables
         </Button>
 
-        {/* Export Dropdown */}
+        {/* Milestone 3: Multi-Format Export Center */}
         <Button
-          icon={<DownloadOutlined />}
-          onClick={handleExportJSON}
-          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
+          icon={<ExportOutlined style={{ color: '#10b981' }} />}
+          onClick={openExportCenterModal}
+          style={{ backgroundColor: '#0284c7', borderColor: '#0284c7', color: '#f8fafc', fontWeight: 600 }}
         >
-          Export JSON
+          Export Center
         </Button>
 
         {/* Clear Canvas */}

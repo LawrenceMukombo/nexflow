@@ -50,6 +50,10 @@ export const Canvas: React.FC = () => {
     showElectricFlow,
     showFluidFlow,
     showVideoFlow,
+    showPacketLabels,
+    setShowPacketLabels,
+    flowDensity,
+    setFlowDensity,
     selectNode,
     selectNodes,
     selectAllNodes,
@@ -873,7 +877,8 @@ export const Canvas: React.FC = () => {
 
               {/* Speed Multiplier Pills */}
               <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                {[0.5, 1, 2, 5].map((speed) => (
+                <span style={{ fontSize: 10, color: '#64748b', marginRight: 2 }}>Speed:</span>
+                {[0.25, 0.5, 1, 2].map((speed) => (
                   <button
                     key={speed}
                     onClick={() => setSimulationSpeed(speed)}
@@ -887,8 +892,57 @@ export const Canvas: React.FC = () => {
                       fontWeight: 600,
                       cursor: 'pointer'
                     }}
+                    title={speed === 0.25 ? '0.25x (Zen Calm)' : speed === 0.5 ? '0.5x (Smooth Flow - Recommended)' : `${speed}x`}
                   >
                     {speed}x
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Pacing & Visual Clutter Controls (Calm Flow Tuning) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', backgroundColor: '#090d16', borderRadius: 6, border: '1px solid #1e293b' }}>
+              <button
+                onClick={() => setShowPacketLabels(!showPacketLabels)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  backgroundColor: showPacketLabels ? '#0369a1' : 'transparent',
+                  color: showPacketLabels ? '#ffffff' : '#94a3b8',
+                  border: showPacketLabels ? '1px solid #38bdf8' : '1px solid #334155',
+                  borderRadius: 4,
+                  padding: '2px 8px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+                title="Toggle packet text tags on cables (keep off for clean diagram)"
+              >
+                <span>🏷️ Tags:</span>
+                <span style={{ color: showPacketLabels ? '#38bdf8' : '#64748b' }}>{showPacketLabels ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <span style={{ fontSize: 10, color: '#64748b' }}>Density:</span>
+                {(['CALM', 'BALANCED', 'HIGH'] as const).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setFlowDensity(d)}
+                    style={{
+                      backgroundColor: flowDensity === d ? '#0284c7' : '#1e293b',
+                      color: flowDensity === d ? '#ffffff' : '#64748b',
+                      border: 'none',
+                      borderRadius: 3,
+                      padding: '2px 5px',
+                      fontSize: 9.5,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                    title={d === 'CALM' ? 'Calm (Subtle photon pulses)' : d === 'BALANCED' ? 'Balanced (Standard flow)' : 'High density'}
+                  >
+                    {d === 'CALM' ? 'Calm' : d === 'BALANCED' ? 'Std' : 'Max'}
                   </button>
                 ))}
               </div>
@@ -1421,14 +1475,12 @@ export const Canvas: React.FC = () => {
               return (
                 <g key={pkt.id} transform={`translate(${px}, ${py})`}>
                   {/* Outer Plasma Arc Aura */}
-                  <circle r={12} fill={sparkColor} opacity={0.25} filter="blur(2px)" />
+                  <circle r={8} fill={sparkColor} opacity={0.3} filter="blur(2px)" />
                   {/* Core Lightning Orb */}
-                  <circle r={6.5} fill={sparkColor} stroke="#ffffff" strokeWidth={1.5} filter={`drop-shadow(0 0 6px ${sparkColor})`} />
-                  {/* Micro Lightning Bolt Icon */}
-                  <path d="M -1 -4 L 2 -1 L 0 -1 L 1 4 L -2 0 L 0 0 Z" fill="#ffffff" />
+                  <circle r={4.5} fill={sparkColor} stroke="#ffffff" strokeWidth={1.2} filter={`drop-shadow(0 0 6px ${sparkColor})`} />
                   
-                  {/* Current / Wattage Pill Badge */}
-                  {pkt.label && (
+                  {/* Current / Wattage Pill Badge (Visible only when showPacketLabels is active) */}
+                  {showPacketLabels && pkt.label && (
                     <g transform="translate(0, -14)">
                       <rect x={-48} y={-9} width={96} height={17} rx={8.5} fill="#181504" stroke={sparkColor} strokeWidth={1.2} />
                       <text x={0} y={3} fill="#fef08a" fontSize="8.5" fontWeight="700" fontFamily="monospace" textAnchor="middle">
@@ -1445,14 +1497,12 @@ export const Canvas: React.FC = () => {
               return (
                 <g key={pkt.id} transform={`translate(${px}, ${py})`}>
                   {/* Outer Liquid Droplet Halo */}
-                  <circle r={11} fill="#0284c7" opacity={0.3} filter="blur(1px)" />
+                  <circle r={8} fill="#0284c7" opacity={0.3} filter="blur(1px)" />
                   {/* Liquid Water Sphere */}
-                  <circle r={7} fill="#06b6d4" stroke="#e0f2fe" strokeWidth={1.5} filter="drop-shadow(0 0 6px #06b6d4)" />
-                  {/* Specular Glint Highlight */}
-                  <circle cx={-2} cy={-2} r={2} fill="#ffffff" opacity={0.9} />
+                  <circle r={4.5} fill="#06b6d4" stroke="#e0f2fe" strokeWidth={1.2} filter="drop-shadow(0 0 6px #06b6d4)" />
                   
-                  {/* Hydronic Flow Rate / Temp Pill Badge */}
-                  {pkt.label && (
+                  {/* Hydronic Flow Rate / Temp Pill Badge (Visible only when showPacketLabels is active) */}
+                  {showPacketLabels && pkt.label && (
                     <g transform="translate(0, -14)">
                       <rect x={-52} y={-9} width={104} height={17} rx={8.5} fill="#041824" stroke="#06b6d4" strokeWidth={1.2} />
                       <text x={0} y={3} fill="#7dd3fc" fontSize="8.5" fontWeight="700" fontFamily="monospace" textAnchor="middle">
@@ -1468,9 +1518,9 @@ export const Canvas: React.FC = () => {
             if (pkt.medium === 'VIDEO') {
               return (
                 <g key={pkt.id} transform={`translate(${px}, ${py})`}>
-                  <circle r={10} fill="#c026d3" opacity={0.25} />
-                  <rect x={-6} y={-4.5} width={12} height={9} rx={2} fill="#d946ef" stroke="#ffffff" strokeWidth={1.2} filter="drop-shadow(0 0 6px #d946ef)" />
-                  {pkt.label && (
+                  <circle r={7} fill="#c026d3" opacity={0.3} />
+                  <circle r={4} fill="#d946ef" stroke="#ffffff" strokeWidth={1} filter="drop-shadow(0 0 6px #d946ef)" />
+                  {showPacketLabels && pkt.label && (
                     <g transform="translate(0, -14)">
                       <rect x={-48} y={-9} width={96} height={17} rx={8.5} fill="#240523" stroke="#d946ef" strokeWidth={1.2} />
                       <text x={0} y={3} fill="#f5d0fe" fontSize="8.5" fontWeight="700" fontFamily="monospace" textAnchor="middle">
@@ -1482,26 +1532,24 @@ export const Canvas: React.FC = () => {
               );
             }
 
-            // 4. DATA PACKET PARTICLE (Ethernet Frame / IP Packet)
+            // 4. DATA PACKET PARTICLE (Ethernet Frame / Laser Photon Pulse)
             return (
               <g key={pkt.id} transform={`translate(${px}, ${py})`}>
+                {/* Glowing Laser Photon Bead */}
                 <circle
                   r={8}
                   fill={pkt.status === 'FAILED' ? '#ef4444' : '#0284c7'}
-                  opacity={0.3}
+                  opacity={0.35}
                 />
-                <rect
-                  x={-6}
-                  y={-4.5}
-                  width={12}
-                  height={9}
-                  rx={2.5}
+                <circle
+                  r={4.5}
                   fill={pkt.status === 'FAILED' ? '#ef4444' : '#38bdf8'}
                   stroke="#ffffff"
-                  strokeWidth={1}
+                  strokeWidth={1.2}
                   filter="drop-shadow(0 0 6px #38bdf8)"
                 />
-                {pkt.label && (
+                {/* Data Packet Label Badge (Visible only when showPacketLabels is active) */}
+                {showPacketLabels && pkt.label && (
                   <g transform="translate(0, -14)">
                     <rect x={-36} y={-9} width={72} height={17} rx={8.5} fill="#081528" stroke="#38bdf8" strokeWidth={1.2} />
                     <text x={0} y={3} fill="#e0f2fe" fontSize="8.5" fontWeight="700" fontFamily="monospace" textAnchor="middle">

@@ -14,6 +14,9 @@ import { CreateComponentModal } from './components/CreateComponentModal';
 import { SaveAssemblyModal } from './components/SaveAssemblyModal';
 import { ProjectsManagerModal } from './components/ProjectsManagerModal';
 import { QuickEditModal } from './components/QuickEditModal';
+import { DesignReportModal } from './components/DesignReportModal';
+import { VersionDiffModal } from './components/VersionDiffModal';
+import { ExportCenterModal } from './components/ExportCenterModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -33,7 +36,8 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!isSimulating) return;
 
-    const interval = Math.max(20, Math.round(120 / simulationSpeed));
+    // Smooth, calm simulation interval (comfortable human visual cadence)
+    const interval = Math.max(50, Math.round(220 / simulationSpeed));
     const timer = setInterval(() => {
       tickSimulation();
     }, interval);
@@ -91,6 +95,9 @@ export const App: React.FC = () => {
         <SaveAssemblyModal />
         <ProjectsManagerModal />
         <QuickEditModal />
+        <DesignReportModal />
+        <VersionDiffModal />
+        <ExportCenterModal />
       </div>
     </ConfigProvider>
   );

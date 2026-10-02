@@ -114,6 +114,9 @@ export function spawnContinuousFlowPackets(
     packetsPerConn[p.currentEdgeId] = (packetsPerConn[p.currentEdgeId] || 0) + 1;
   }
 
+  // Limit total active particles on canvas for visual elegance and clarity
+  if (existingPackets.length >= 10) return existingPackets;
+
   const newPackets: SimulationPacket[] = [];
 
   for (const conn of connections) {
@@ -125,9 +128,10 @@ export function spawnContinuousFlowPackets(
       continue;
     }
 
-    // Limit maximum simultaneous particles per connection
+    // Limit to at most 1 calm particle per connection and stagger spawn
     const currentCount = packetsPerConn[conn.id] || 0;
-    if (currentCount >= 2) continue;
+    if (currentCount >= 1) continue;
+    if (Math.random() > 0.45) continue; // Natural staggered cadence
 
     // Determine domain & medium
     const connType = conn.connectionType.toUpperCase();
@@ -261,8 +265,8 @@ export function stepNetworkSimulation(
     }
 
     // Advance progress along connection
-    // Standard traversal speed ~12% per step
-    const speedIncrement = packet.medium === 'ELECTRICITY' ? 16 : packet.medium === 'FLUID' ? 10 : 14;
+    // Calm, smooth human-paced traversal ~4-6% per step
+    const speedIncrement = packet.medium === 'ELECTRICITY' ? 6 : packet.medium === 'FLUID' ? 4 : 5;
     packet.progressPercent += speedIncrement;
 
     // Track link load
