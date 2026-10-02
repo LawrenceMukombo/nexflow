@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Space, Select, Badge, Tooltip, message } from 'antd';
+import { Button, Space, Select, Badge, Tooltip, message, Tag } from 'antd';
 import { 
   PlayCircleFilled, 
   PauseCircleFilled, 
@@ -16,7 +16,8 @@ import {
   BuildOutlined,
   PartitionOutlined,
   BookOutlined,
-  SaveOutlined
+  SaveOutlined,
+  FolderOpenOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -33,6 +34,11 @@ export const TopNav: React.FC = () => {
     toggleWizardModal,
     toggleLibraryModal,
     toggleSaveAssemblyModal,
+    toggleProjectsModal,
+    savedProjects,
+    currentProjectName,
+    isProjectDirty,
+    saveCurrentProject,
     libraries,
     autoLayout,
     isSimulating,
@@ -111,9 +117,53 @@ export const TopNav: React.FC = () => {
           ]}
         />
 
-        <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>
-          {graph.name}
-        </span>
+        <div style={{ width: 1, height: 20, backgroundColor: '#334155' }} />
+
+        {/* Projects Manager Button & Quick Save */}
+        <Space size="small">
+          <Badge count={savedProjects.length} size="small" offset={[-2, 4]} color="#10b981">
+            <Button
+              icon={<FolderOpenOutlined style={{ color: '#10b981' }} />}
+              onClick={() => toggleProjectsModal(true)}
+              style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500 }}
+              size="middle"
+            >
+              Projects
+            </Button>
+          </Badge>
+
+          <Button
+            icon={<SaveOutlined style={{ color: isProjectDirty ? '#f59e0b' : '#38bdf8' }} />}
+            onClick={() => {
+              saveCurrentProject();
+              message.success(`Saved "${currentProjectName}" successfully!`);
+            }}
+            style={{ 
+              backgroundColor: '#1e293b', 
+              borderColor: isProjectDirty ? '#f59e0b' : '#334155', 
+              color: '#f8fafc' 
+            }}
+            size="middle"
+          >
+            Save {isProjectDirty && '•'}
+          </Button>
+
+          <Tag 
+            color="blue" 
+            style={{ 
+              cursor: 'pointer', 
+              padding: '2px 8px', 
+              fontSize: 12, 
+              borderRadius: 4,
+              backgroundColor: 'rgba(2, 132, 199, 0.15)',
+              borderColor: '#0284c7',
+              color: '#38bdf8'
+            }}
+            onClick={() => toggleProjectsModal(true)}
+          >
+            📁 {currentProjectName} {isProjectDirty ? '(Unsaved)' : ''}
+          </Tag>
+        </Space>
       </div>
 
       {/* Primary Actions: Simulation, Validation, Reports */}

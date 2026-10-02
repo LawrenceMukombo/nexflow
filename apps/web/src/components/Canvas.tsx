@@ -111,17 +111,34 @@ export const Canvas: React.FC = () => {
   };
 
   // Helper to compute port screen coordinates for connection lines
-  const getPortCoordinates = useCallback((node: EngineeringComponent, port: ComponentPort) => {
+  const getPortCoordinates = useCallback((
+    node: EngineeringComponent, 
+    port: ComponentPort,
+    targetNode?: EngineeringComponent
+  ) => {
     const nodeWidth = 210;
-    const nodeHeaderHeight = 38;
+    const nodeHeaderHeight = 36;
+    const propBoxHeight = 44;
     const portItemHeight = 22;
-    const portIndex = node.ports.findIndex(p => p.id === port.id);
-    
-    // Position port anchor on either left or right edge depending on index or direction
-    const isLeft = port.direction === 'input' || (portIndex % 2 === 0 && port.direction !== 'output');
-    const x = isLeft ? node.position.x : node.position.x + nodeWidth;
-    const y = node.position.y + nodeHeaderHeight + 14 + (portIndex * portItemHeight);
+    const portIndex = Math.max(0, node.ports.findIndex(p => p.id === port.id));
 
+    const portOffsetY = nodeHeaderHeight + propBoxHeight + 8 + (portIndex * portItemHeight);
+
+    // Intelligently pick left or right anchor facing target node
+    let x: number;
+    if (targetNode) {
+      if (targetNode.position.x > node.position.x + 60) {
+        x = node.position.x + nodeWidth; // right edge
+      } else if (targetNode.position.x < node.position.x - 60) {
+        x = node.position.x; // left edge
+      } else {
+        x = node.position.x + (nodeWidth / 2);
+      }
+    } else {
+      x = (portIndex % 2 === 0) ? node.position.x + nodeWidth : node.position.x;
+    }
+
+    const y = node.position.y + Math.min(portOffsetY, 380);
     return { x, y };
   }, []);
 
@@ -276,16 +293,36 @@ export const Canvas: React.FC = () => {
             const tgtPort = tgtNode.ports.find((p) => p.id === conn.targetPortId);
             if (!srcPort || !tgtPort) return null;
 
-            const start = getPortCoordinates(srcNode, srcPort);
-            const end = getPortCoordinates(tgtNode, tgtPort);
+            const start = getPortCoordinates(srcNode, srcPort, tgtNode);
+            const end = getPortCoordinates(tgtNode, tgtPort, srcNode);
 
-            // Compute smooth cubic bezier path
-            const dx = Math.abs(end.x - start.x) * 0.5;
-            const pathData = `M ${start.x} ${start.y} C ${start.x + dx} ${start.y}, ${end.x - dx} ${end.y}, ${end.x} ${end.y}`;
+            // Compute smooth cubic bezier path with directional curvature
+            const dx = Math.max(35, Math.abs(end.x - start.x) * 0.45);
+            const cx1 = start.x < end.x ? start.x + dx : start.x - dx;
+            const cx2 = end.x > start.x ? end.x - dx : end.x + dx;
+            const pathData = `M ${start.x} ${start.y} C ${cx1} ${start.y}, ${cx2} ${end.y}, ${end.x} ${end.y}`;
 
             const isSelected = selectedConnectionId === conn.id;
             const isFailed = conn.simulationState.isFailed || srcNode.simulationState.isFailed || tgtNode.simulationState.isFailed;
-            const isFiber = conn.connectionType.includes('FIBER');
+
+            // Compute vibrant, high-contrast cable color
+            const getCableColor = (connType: string) => {
+              if (isFailed) return '#ef4444';
+              if (isSelected) return '#38bdf8';
+              const type = connType.toUpperCase();
+              if (type.includes('FIBER')) return '#f59e0b'; // Amber Gold
+              if (type.includes('DAC')) return '#10b981';   // Emerald Green
+              if (type.includes('CAT8') || type.includes('CAT7')) return '#a855f7'; // Purple
+              if (type.includes('CAT6A')) return '#06b6d4'; // Cyan
+              if (type.includes('CAT6')) return '#3b82f6';  // Electric Blue
+              if (type.includes('CAT5')) return '#94a3b8';  // Silver Slate
+              if (type.includes('COAX')) return '#e2e8f0';  // Bright White
+              return '#3b82f6';
+            };
+
+            const cableColor = getCableColor(conn.connectionType);
+            const midX = (start.x + end.x) / 2;
+            const midY = (start.y + end.y) / 2;
 
             return (
               <g key={conn.id} style={{ pointerEvents: 'stroke', cursor: 'pointer' }} onClick={() => selectConnection(conn.id)}>
@@ -294,30 +331,59 @@ export const Canvas: React.FC = () => {
                   d={pathData}
                   fill="none"
                   stroke="transparent"
-                  strokeWidth={14}
+                  strokeWidth={20}
                 />
-                {/* Visual cable path */}
+
+                {/* Ambient Glow / Halo Path */}
                 <path
                   d={pathData}
                   fill="none"
-                  stroke={isFailed ? '#ef4444' : isSelected ? '#38bdf8' : isFiber ? 'url(#gradFiber)' : 'url(#gradCat6)'}
-                  strokeWidth={isSelected ? 3.5 : 2}
+                  stroke={cableColor}
+                  strokeWidth={isSelected ? 9 : 6}
+                  strokeOpacity={0.25}
+                  strokeLinecap="round"
+                />
+
+                {/* Primary Crisp Cable Path */}
+                <path
+                  d={pathData}
+                  fill="none"
+                  stroke={cableColor}
+                  strokeWidth={isSelected ? 3.5 : 2.5}
                   strokeDasharray={isFailed ? '6,4' : undefined}
+                  strokeLinecap="round"
                   style={{ transition: 'stroke 0.2s, stroke-width 0.2s' }}
                 />
 
-                {/* Cable Type & Length Badge */}
-                <text
-                  x={(start.x + end.x) / 2}
-                  y={(start.y + end.y) / 2 - 8}
-                  fill="#94a3b8"
-                  fontSize="10"
-                  fontFamily="monospace"
-                  textAnchor="middle"
-                  style={{ pointerEvents: 'none', userSelect: 'none' }}
-                >
-                  {conn.connectionType} • {conn.lengthMeters}m
-                </text>
+                {/* Terminal Connector Dots */}
+                <circle cx={start.x} cy={start.y} r={4.5} fill={cableColor} stroke="#090d16" strokeWidth={1.5} />
+                <circle cx={end.x} cy={end.y} r={4.5} fill={cableColor} stroke="#090d16" strokeWidth={1.5} />
+
+                {/* High-Contrast Cable Type & Length Badge Pill */}
+                <g transform={`translate(${midX}, ${midY - 10})`}>
+                  <rect
+                    x={-45}
+                    y={-10}
+                    width={90}
+                    height={20}
+                    rx={10}
+                    fill="#0b111e"
+                    stroke={cableColor}
+                    strokeWidth={1.2}
+                  />
+                  <text
+                    x={0}
+                    y={4}
+                    fill="#f8fafc"
+                    fontSize="9.5"
+                    fontWeight="600"
+                    fontFamily="monospace"
+                    textAnchor="middle"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                  >
+                    {conn.connectionType} • {conn.lengthMeters}m
+                  </text>
+                </g>
               </g>
             );
           })}
@@ -335,21 +401,17 @@ export const Canvas: React.FC = () => {
             const tgtPort = tgtNode.ports.find((p) => p.id === conn.targetPortId);
             if (!srcPort || !tgtPort) return null;
 
-            const start = getPortCoordinates(srcNode, srcPort);
-            const end = getPortCoordinates(tgtNode, tgtPort);
+            const start = getPortCoordinates(srcNode, srcPort, tgtNode);
+            const end = getPortCoordinates(tgtNode, tgtPort, srcNode);
 
             // Interpolate position along bezier curve
             const t = Math.min(1, Math.max(0, pkt.progressPercent / 100));
-            const dx = Math.abs(end.x - start.x) * 0.5;
-            
-            // Standard cubic bezier formula
-            const cx1 = start.x + dx;
-            const cy1 = start.y;
-            const cx2 = end.x - dx;
-            const cy2 = end.y;
+            const dx = Math.max(35, Math.abs(end.x - start.x) * 0.45);
+            const cx1 = start.x < end.x ? start.x + dx : start.x - dx;
+            const cx2 = end.x > start.x ? end.x - dx : end.x + dx;
 
             const px = Math.pow(1 - t, 3) * start.x + 3 * Math.pow(1 - t, 2) * t * cx1 + 3 * (1 - t) * Math.pow(t, 2) * cx2 + Math.pow(t, 3) * end.x;
-            const py = Math.pow(1 - t, 3) * start.y + 3 * Math.pow(1 - t, 2) * t * cy1 + 3 * (1 - t) * Math.pow(t, 2) * cy2 + Math.pow(t, 3) * end.y;
+            const py = Math.pow(1 - t, 3) * start.y + 3 * Math.pow(1 - t, 2) * t * start.y + 3 * (1 - t) * Math.pow(t, 2) * end.y + Math.pow(t, 3) * end.y;
 
             return (
               <g key={pkt.id} transform={`translate(${px}, ${py})`}>

@@ -9,7 +9,8 @@ import {
   EngineeringDomain,
   ComponentLibrary,
   LibraryAssembly,
-  ComponentTemplate
+  ComponentTemplate,
+  SavedProject
 } from '@omniflow/shared-types';
 import { 
   createComponentInstance, 
@@ -50,6 +51,13 @@ export interface GraphState {
   isLibraryModalOpen: boolean;
   isCreateComponentModalOpen: boolean;
   isSaveAssemblyModalOpen: boolean;
+  isProjectsModalOpen: boolean;
+
+  // Projects Management
+  currentProjectId: string;
+  currentProjectName: string;
+  savedProjects: SavedProject[];
+  isProjectDirty: boolean;
 
   // Libraries & Assemblies
   libraries: ComponentLibrary[];
@@ -105,6 +113,19 @@ export interface GraphState {
   deleteLibrary: (libraryId: string) => void;
   deleteCustomComponent: (libraryId: string, componentType: string) => void;
 
+  // Project Management Actions
+  toggleProjectsModal: (open?: boolean) => void;
+  saveCurrentProject: (name?: string, description?: string) => void;
+  saveAsNewProject: (name: string, description?: string) => void;
+  loadProject: (projectId: string) => void;
+  deleteProject: (projectId: string) => void;
+  duplicateProject: (projectId: string) => void;
+  renameProject: (projectId: string, newName: string) => void;
+  importProjectFromFile: (jsonString: string) => { success: boolean; message: string };
+  exportProjectToFile: (projectId: string) => void;
+  setCurrentProjectName: (name: string) => void;
+  createNewBlankProject: (name?: string) => void;
+
   toggleSimulation: (running?: boolean) => void;
   setSimulationSpeed: (speed: number) => void;
   triggerPacketBurst: () => void;
@@ -157,13 +178,78 @@ function pushSnapshot(state: GraphState): Partial<GraphState> {
   };
 }
 
+const PROJECTS_STORAGE_KEY = 'omniflow_saved_projects_v1';
+
+function getStoredProjects(): SavedProject[] {
+  try {
+    const raw = typeof window !== 'undefined' ? localStorage.getItem(PROJECTS_STORAGE_KEY) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.warn('Could not read saved projects from localStorage', err);
+  }
+
+  // Initial Seed Projects
+  const demoGraph = createDemoSmallOfficeGraph();
+  const seed1: SavedProject = {
+    id: 'proj_small_office_01',
+    name: 'Corporate HQ Small Office Network',
+    description: 'Baseline SME multi-tier network with firewall, PoE switching, and workstations.',
+    domain: 'NETWORK',
+    graph: demoGraph,
+    deviceCount: Object.keys(demoGraph.nodes).length,
+    connectionCount: Object.keys(demoGraph.connections).length,
+    estimatedCost: 14500,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  const seed2Graph = generateWizardTopology({
+    archetype: 'DATA_CENTER',
+    projectName: 'High-Density Data Center Spine/Leaf',
+    subnetPrefix: '10.240.0',
+    clientCount: 12,
+    includeWifi: false,
+    includeVoip: false,
+    includeRedundancy: true
+  });
+  const seed2: SavedProject = {
+    id: 'proj_datacenter_spine_leaf',
+    name: 'High-Density Data Center Spine/Leaf',
+    description: 'BGP Edge Border Router with 10G SFP+ Aggregation, 42U server racks, dual UPS, and SAN array.',
+    domain: 'NETWORK',
+    graph: seed2Graph,
+    deviceCount: Object.keys(seed2Graph.nodes).length,
+    connectionCount: Object.keys(seed2Graph.connections).length,
+    estimatedCost: 89400,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  return [seed1, seed2];
+}
+
+function persistProjects(projects: SavedProject[]) {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
+    }
+  } catch (err) {
+    console.warn('Could not save projects to localStorage', err);
+  }
+}
+
+const initialProjects = getStoredProjects();
+
 export const useGraphStore = create<GraphState>((set, get) => ({
-  graph: initialGraph,
+  graph: initialProjects[0]?.graph || initialGraph,
   activeDomain: 'NETWORK',
   selectedNodeId: null,
   selectedConnectionId: null,
   pendingPort: null,
-  viewport: { x: 50, y: 50, zoom: 1.0 },
+  viewport: { x: 50, y: 50, zoom: 0.9 },
 
   validationIssues: [],
   isValidationDrawerOpen: false,
@@ -173,6 +259,12 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isLibraryModalOpen: false,
   isCreateComponentModalOpen: false,
   isSaveAssemblyModalOpen: false,
+  isProjectsModalOpen: false,
+
+  currentProjectId: initialProjects[0]?.id || 'proj_default',
+  currentProjectName: initialProjects[0]?.name || 'Corporate HQ Network Blueprint',
+  savedProjects: initialProjects,
+  isProjectDirty: false,
 
   libraries: BUILTIN_LIBRARIES,
   activeLibraryId: 'lib_cisco_enterprise',
@@ -997,5 +1089,323 @@ export const useGraphStore = create<GraphState>((set, get) => ({
       });
       get().validate();
     }
+  },
+  // Project Management Implementations
+  toggleProjectsModal: (open) => {
+    set((state) => ({
+      isProjectsModalOpen: open !== undefined ? open : !state.isProjectsModalOpen
+    }));
+  },
+
+  setCurrentProjectName: (name) => {
+    set((state) => ({
+      currentProjectName: name,
+      graph: {
+        ...state.graph,
+        name,
+        metadata: { ...state.graph.metadata, updatedAt: new Date().toISOString() }
+      },
+      isProjectDirty: true
+    }));
+  },
+
+  saveCurrentProject: (name, description) => {
+    const { currentProjectId, currentProjectName, graph, savedProjects } = get();
+    const projName = name || currentProjectName || graph.name;
+    const now = new Date().toISOString();
+
+    const deviceCount = Object.keys(graph.nodes).length;
+    const connectionCount = Object.keys(graph.connections).length;
+    const estimatedCost = Object.values(graph.nodes).reduce((s, n) => s + (n.costData?.unitCost || 0), 0);
+
+    const existingIdx = savedProjects.findIndex(p => p.id === currentProjectId);
+    let updated: SavedProject[];
+
+    if (existingIdx >= 0) {
+      const existing = savedProjects[existingIdx];
+      const updatedProj: SavedProject = {
+        ...existing,
+        name: projName,
+        description: description !== undefined ? description : existing.description,
+        graph: JSON.parse(JSON.stringify(graph)),
+        deviceCount,
+        connectionCount,
+        estimatedCost,
+        updatedAt: now
+      };
+      updated = [...savedProjects];
+      updated[existingIdx] = updatedProj;
+    } else {
+      const newProj: SavedProject = {
+        id: currentProjectId || `proj_${Date.now()}`,
+        name: projName,
+        description: description || 'Visual Engineering Project',
+        domain: graph.domain,
+        graph: JSON.parse(JSON.stringify(graph)),
+        deviceCount,
+        connectionCount,
+        estimatedCost,
+        createdAt: now,
+        updatedAt: now
+      };
+      updated = [newProj, ...savedProjects];
+    }
+
+    persistProjects(updated);
+    set({
+      savedProjects: updated,
+      currentProjectName: projName,
+      isProjectDirty: false
+    });
+  },
+
+  saveAsNewProject: (name, description) => {
+    const { graph, savedProjects } = get();
+    const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+
+    const deviceCount = Object.keys(graph.nodes).length;
+    const connectionCount = Object.keys(graph.connections).length;
+    const estimatedCost = Object.values(graph.nodes).reduce((s, n) => s + (n.costData?.unitCost || 0), 0);
+
+    const newGraph: EngineeringGraph = {
+      ...graph,
+      name,
+      designId: newId,
+      metadata: { ...graph.metadata, updatedAt: now }
+    };
+
+    const newProj: SavedProject = {
+      id: newId,
+      name,
+      description: description || 'Custom Engineering Project',
+      domain: newGraph.domain,
+      graph: newGraph,
+      deviceCount,
+      connectionCount,
+      estimatedCost,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const updated = [newProj, ...savedProjects];
+    persistProjects(updated);
+
+    set((state) => ({
+      currentProjectId: newId,
+      currentProjectName: name,
+      savedProjects: updated,
+      graph: newGraph,
+      isProjectDirty: false,
+      ...pushSnapshot({ ...state, graph: newGraph })
+    }));
+  },
+
+  loadProject: (projectId) => {
+    const { savedProjects } = get();
+    const project = savedProjects.find(p => p.id === projectId);
+    if (!project) return;
+
+    const clonedGraph: EngineeringGraph = JSON.parse(JSON.stringify(project.graph));
+
+    set((state) => ({
+      graph: clonedGraph,
+      currentProjectId: project.id,
+      currentProjectName: project.name,
+      selectedNodeId: null,
+      selectedConnectionId: null,
+      pendingPort: null,
+      activePackets: [],
+      isProjectsModalOpen: false,
+      isProjectDirty: false,
+      viewport: { x: 40, y: 40, zoom: 0.85 },
+      ...pushSnapshot({ ...state, graph: clonedGraph })
+    }));
+
+    get().validate();
+  },
+
+  deleteProject: (projectId) => {
+    const { savedProjects, currentProjectId } = get();
+    if (savedProjects.length <= 1) return; // Keep at least one
+
+    const updated = savedProjects.filter(p => p.id !== projectId);
+    persistProjects(updated);
+
+    if (currentProjectId === projectId) {
+      // Switch to first available project
+      const nextProj = updated[0];
+      get().loadProject(nextProj.id);
+    } else {
+      set({ savedProjects: updated });
+    }
+  },
+
+  duplicateProject: (projectId) => {
+    const { savedProjects } = get();
+    const original = savedProjects.find(p => p.id === projectId);
+    if (!original) return;
+
+    const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const clonedGraph: EngineeringGraph = JSON.parse(JSON.stringify(original.graph));
+    clonedGraph.designId = newId;
+    clonedGraph.name = `${original.name} (Copy)`;
+
+    const duplicatedProj: SavedProject = {
+      ...original,
+      id: newId,
+      name: `${original.name} (Copy)`,
+      graph: clonedGraph,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const updated = [duplicatedProj, ...savedProjects];
+    persistProjects(updated);
+    set({ savedProjects: updated });
+  },
+
+  renameProject: (projectId, newName) => {
+    const { savedProjects, currentProjectId } = get();
+    const updated = savedProjects.map(p => {
+      if (p.id === projectId) {
+        return { ...p, name: newName, updatedAt: new Date().toISOString() };
+      }
+      return p;
+    });
+
+    persistProjects(updated);
+    set((state) => ({
+      savedProjects: updated,
+      currentProjectName: currentProjectId === projectId ? newName : state.currentProjectName,
+      graph: currentProjectId === projectId ? { ...state.graph, name: newName } : state.graph
+    }));
+  },
+
+  createNewBlankProject: (name) => {
+    const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const projName = name || 'Untitled Engineering Design';
+    const now = new Date().toISOString();
+
+    const blankGraph: EngineeringGraph = {
+      schemaVersion: '1.0',
+      designId: newId,
+      name: projName,
+      domain: 'NETWORK',
+      nodes: {},
+      connections: {},
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: '1.0.0',
+        author: 'Lead Network Engineer'
+      }
+    };
+
+    const newProj: SavedProject = {
+      id: newId,
+      name: projName,
+      description: 'Blank project canvas',
+      domain: 'NETWORK',
+      graph: blankGraph,
+      deviceCount: 0,
+      connectionCount: 0,
+      estimatedCost: 0,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const { savedProjects } = get();
+    const updated = [newProj, ...savedProjects];
+    persistProjects(updated);
+
+    set((state) => ({
+      graph: blankGraph,
+      currentProjectId: newId,
+      currentProjectName: projName,
+      savedProjects: updated,
+      selectedNodeId: null,
+      selectedConnectionId: null,
+      pendingPort: null,
+      activePackets: [],
+      validationIssues: [],
+      isProjectsModalOpen: false,
+      isProjectDirty: false,
+      viewport: { x: 100, y: 100, zoom: 1.0 },
+      ...pushSnapshot({ ...state, graph: blankGraph })
+    }));
+  },
+
+  importProjectFromFile: (jsonString) => {
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (!parsed || typeof parsed !== 'object') {
+        return { success: false, message: 'Invalid JSON format' };
+      }
+
+      // Check if it's a SavedProject or an EngineeringGraph
+      let graph: EngineeringGraph;
+      let name = 'Imported Project';
+      let description = 'Imported from JSON file';
+
+      if (parsed.nodes && parsed.connections) {
+        graph = parsed as EngineeringGraph;
+        name = parsed.name || 'Imported Design';
+      } else if (parsed.graph && parsed.graph.nodes) {
+        graph = parsed.graph as EngineeringGraph;
+        name = parsed.name || parsed.graph.name || 'Imported Design';
+        description = parsed.description || description;
+      } else {
+        return { success: false, message: 'JSON does not contain a valid OmniFlow topology' };
+      }
+
+      const newId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const now = new Date().toISOString();
+      const newProj: SavedProject = {
+        id: newId,
+        name,
+        description,
+        domain: graph.domain || 'NETWORK',
+        graph,
+        deviceCount: Object.keys(graph.nodes).length,
+        connectionCount: Object.keys(graph.connections).length,
+        estimatedCost: Object.values(graph.nodes).reduce((s, n) => s + (n.costData?.unitCost || 0), 0),
+        createdAt: now,
+        updatedAt: now
+      };
+
+      const { savedProjects } = get();
+      const updated = [newProj, ...savedProjects];
+      persistProjects(updated);
+
+      set((state) => ({
+        graph,
+        currentProjectId: newId,
+        currentProjectName: name,
+        savedProjects: updated,
+        isProjectsModalOpen: false,
+        isProjectDirty: false,
+        selectedNodeId: null,
+        selectedConnectionId: null,
+        ...pushSnapshot({ ...state, graph })
+      }));
+
+      get().validate();
+      return { success: true, message: `Successfully imported "${name}" with ${newProj.deviceCount} devices.` };
+    } catch (err) {
+      return { success: false, message: `Failed to parse project JSON: ${(err as Error).message}` };
+    }
+  },
+
+  exportProjectToFile: (projectId) => {
+    const { savedProjects } = get();
+    const proj = savedProjects.find(p => p.id === projectId);
+    if (!proj) return;
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(proj, null, 2));
+    const dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute('href', dataStr);
+    dlAnchor.setAttribute('download', `${proj.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_v1.0.json`);
+    dlAnchor.click();
   }
 }));

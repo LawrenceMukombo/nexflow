@@ -228,3 +228,17 @@ export interface ComponentLibrary {
   updatedAt: string;
 }
 
+export interface SavedProject {
+  id: string;
+  name: string;
+  description: string;
+  domain: EngineeringDomain;
+  graph: EngineeringGraph;
+  deviceCount: number;
+  connectionCount: number;
+  estimatedCost: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+

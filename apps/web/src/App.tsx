@@ -12,6 +12,7 @@ import { NetworkWizardModal } from './components/NetworkWizardModal';
 import { LibraryManagerModal } from './components/LibraryManagerModal';
 import { CreateComponentModal } from './components/CreateComponentModal';
 import { SaveAssemblyModal } from './components/SaveAssemblyModal';
+import { ProjectsManagerModal } from './components/ProjectsManagerModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -87,6 +88,7 @@ export const App: React.FC = () => {
         <LibraryManagerModal />
         <CreateComponentModal />
         <SaveAssemblyModal />
+        <ProjectsManagerModal />
       </div>
     </ConfigProvider>
   );
