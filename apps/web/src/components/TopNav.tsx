@@ -13,7 +13,8 @@ import {
   SaveOutlined,
   FilePdfOutlined,
   HistoryOutlined,
-  ExportOutlined
+  ExportOutlined,
+  BarChartOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -27,6 +28,7 @@ export const TopNav: React.FC = () => {
     domainFilterMode,
     setDomainFilterMode,
     toggleDomainFilterMode,
+    openAnalyticsModal,
     validationIssues,
     toggleValidationDrawer,
     toggleBOQModal,
@@ -193,10 +195,27 @@ export const TopNav: React.FC = () => {
           </Button>
         </Badge>
 
+        {/* Analytics & KPI Dashboard (Rule 24 & 25) */}
+        <Button
+          icon={<BarChartOutlined style={{ color: '#38bdf8' }} />}
+          size="small"
+          onClick={openAnalyticsModal}
+          style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontSize: 12, fontWeight: 600 }}
+        >
+          Analytics &amp; KPI
+        </Button>
+
         {/* Documentation & Reports Dropdown */}
         <Dropdown
           menu={{
             items: [
+              {
+                key: 'doc-analytics',
+                icon: <BarChartOutlined style={{ color: '#38bdf8' }} />,
+                label: 'Analytics & KPI Dashboard',
+                onClick: openAnalyticsModal
+              },
+              { type: 'divider' },
               {
                 key: 'doc-boq',
                 icon: <DollarOutlined style={{ color: '#10b981' }} />,

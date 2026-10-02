@@ -34,7 +34,8 @@ import {
   HistoryOutlined,
   ExportOutlined,
   BookOutlined,
-  CodeOutlined
+  CodeOutlined,
+  BarChartOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -87,6 +88,7 @@ export const EnterpriseMenuBar: React.FC = () => {
     openDesignReportModal,
     openVersionDiffModal,
     openExportCenterModal,
+    openAnalyticsModal,
     toggleValidationDrawer,
     validationIssues,
     openCliModal
@@ -540,6 +542,13 @@ export const EnterpriseMenuBar: React.FC = () => {
       label: 'Save Selection as Reusable Template...',
       disabled: selectedNodeIds.length === 0,
       onClick: () => toggleSaveAssemblyModal(true)
+    },
+    { type: 'divider' },
+    {
+      key: 'tool-analytics',
+      icon: <BarChartOutlined style={{ color: '#38bdf8' }} />,
+      label: 'Analytics & Telemetry Dashboard (KPI)...',
+      onClick: openAnalyticsModal
     },
     { type: 'divider' },
     {

@@ -146,6 +146,7 @@ export interface GraphState {
   isDesignReportModalOpen: boolean;
   isVersionDiffModalOpen: boolean;
   isExportCenterModalOpen: boolean;
+  isAnalyticsModalOpen: boolean;
   engineeringStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED';
   designRevisions: DesignRevision[];
 
@@ -256,6 +257,9 @@ export interface GraphState {
   closeVersionDiffModal: () => void;
   openExportCenterModal: () => void;
   closeExportCenterModal: () => void;
+  openAnalyticsModal: () => void;
+  closeAnalyticsModal: () => void;
+  toggleAnalyticsModal: (open?: boolean) => void;
   setEngineeringStatus: (status: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED') => void;
   createDesignRevision: (version: string, summary: string, author?: string) => void;
   revertToRevision: (revisionId: string) => void;
@@ -443,6 +447,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isDesignReportModalOpen: false,
   isVersionDiffModalOpen: false,
   isExportCenterModalOpen: false,
+  isAnalyticsModalOpen: false,
   engineeringStatus: 'DRAFT',
   designRevisions: [
     {
@@ -1892,6 +1897,9 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   closeVersionDiffModal: () => set({ isVersionDiffModalOpen: false }),
   openExportCenterModal: () => set({ isExportCenterModalOpen: true }),
   closeExportCenterModal: () => set({ isExportCenterModalOpen: false }),
+  openAnalyticsModal: () => set({ isAnalyticsModalOpen: true }),
+  closeAnalyticsModal: () => set({ isAnalyticsModalOpen: false }),
+  toggleAnalyticsModal: (open) => set((state) => ({ isAnalyticsModalOpen: open !== undefined ? open : !state.isAnalyticsModalOpen })),
   setEngineeringStatus: (status) => set({ engineeringStatus: status }),
   createDesignRevision: (version, summary, author = 'Design Engineer') => {
     const { graph, designRevisions } = get();

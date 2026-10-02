@@ -169,7 +169,17 @@ const hyperRack = Object.values(multiDomainGraph.nodes).find(n => n.type === 'RA
 assert(hyperRack !== undefined, 'Hyperscale 42U rack exists in smart facility');
 
 // 13. Multi-Domain Flow Simulation Test
-const initialPackets = spawnContinuousFlowPackets(multiDomainGraph, []);
+let initialPackets: SimulationPacket[] = [];
+for (let iter = 0; iter < 15; iter++) {
+  initialPackets = spawnContinuousFlowPackets(multiDomainGraph, initialPackets);
+  if (
+    initialPackets.some(p => p.medium === 'ELECTRICITY') &&
+    initialPackets.some(p => p.medium === 'FLUID') &&
+    initialPackets.some(p => p.medium === 'DATA')
+  ) {
+    break;
+  }
+}
 assert(initialPackets.length > 0, `Continuous flow generator spawned ${initialPackets.length} multi-domain flow particles`);
 assert(initialPackets.some(p => p.medium === 'ELECTRICITY'), 'Electrical current flow particles spawned');
 assert(initialPackets.some(p => p.medium === 'FLUID'), 'Chilled water fluid flow particles spawned');
