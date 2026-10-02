@@ -5,3 +5,8 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# Electron desktop build outputs
+apps/desktop/dist-installer/
+apps/desktop/web-dist/
+apps/desktop/node_modules/

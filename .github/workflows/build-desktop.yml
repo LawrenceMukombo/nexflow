@@ -1,0 +1,78 @@
+﻿name: Build NexFlow Desktop (Windows)
+
+on:
+  push:
+    branches: [master, feat/**]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build --workspace=@omniflow/web
+
+      - name: Copy web build for Electron
+        run: |
+          New-Item -ItemType Directory -Path "apps/desktop/web-dist" -Force | Out-Null
+          Copy-Item -Path "apps/web/dist/*" -Destination "apps/desktop/web-dist/" -Recurse -Force
+
+      - name: Install desktop dependencies
+        run: npm ci
+        working-directory: apps/desktop
+
+      - name: Build Windows installer (NSIS + Portable)
+        run: npx electron-builder --win --x64
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexFlow-Windows-Installer
+          path: |
+            apps/desktop/dist-installer/*.exe
+            apps/desktop/dist-installer/*.yml
+          retention-days: 30
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/dist-installer/*.exe
+          generate_release_notes: true
+          body: |
+            ## NexFlow Desktop
+            Windows installer for NexFlow Enterprise Engineering Design Platform.
+
+            **Developer:** Lawrence Mukombo  
+            **Version:** ${{ github.ref_name }}  
+            **Platform:** Windows x64
+
+            ### Installation
+            1. Download `NexFlow-Setup-*.exe`
+            2. Run the installer and follow the wizard
+            3. Launch from Desktop shortcut or Start Menu
+
+            ### Features in this release
+            - Multi-domain Engineering Canvas (Network, Electrical, Plumbing, Solar, CCTV)
+            - Live Simulation with animated data packets/signals/fluid flow
+            - Component Library with drag-and-drop Wizard Builder
+            - Domain Isolation & Canvas Manipulation Menu
+            - Animated Splash Screen

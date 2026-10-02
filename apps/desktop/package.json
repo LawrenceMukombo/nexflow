@@ -1,0 +1,69 @@
+﻿{
+  "name": "@nexflow/desktop",
+  "version": "2.0.0",
+  "description": "NexFlow Enterprise Engineering Design Platform — Desktop",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron . --dev",
+    "build:web": "npm run build --workspace=@omniflow/web",
+    "electron:dev": "cross-env NODE_ENV=development electron .",
+    "electron:pack": "electron-builder --dir",
+    "electron:dist": "npm run build:web && electron-builder"
+  },
+  "build": {
+    "appId": "com.nexflow.desktop",
+    "productName": "NexFlow",
+    "copyright": "Copyright 2026 Lawrence Mukombo",
+    "directories": {
+      "output": "dist-installer",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "web-dist/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeader": "assets/installer-header.bmp",
+      "installerSidebar": "assets/installer-sidebar.bmp",
+      "license": "assets/license.txt",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NexFlow",
+      "displayLanguageSelector": false,
+      "installerHeaderBranding": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icon.png",
+      "category": "Engineering"
+    },
+    "extraResources": [
+      { "from": "../../apps/web/dist", "to": "web-dist", "filter": ["**/*"] }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "cross-env": "^7.0.3"
+  }
+}

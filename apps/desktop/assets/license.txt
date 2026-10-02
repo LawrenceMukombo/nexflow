@@ -1,0 +1,3 @@
+﻿NexFlow Enterprise Engineering Design Platform
+Copyright 2026 Lawrence Mukombo. All rights reserved.
+This software is proprietary and confidential.
