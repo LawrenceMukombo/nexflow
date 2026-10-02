@@ -15,7 +15,8 @@ import {
   HistoryOutlined,
   ExportOutlined,
   BarChartOutlined,
-  AlertOutlined
+  AlertOutlined,
+  DeploymentUnitOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -41,6 +42,7 @@ export const TopNav: React.FC = () => {
     openVersionDiffModal,
     openExportCenterModal,
     openFailoverModal,
+    openDigitalTwinModal,
     engineeringStatus,
     setEngineeringStatus,
     currentProjectName,
@@ -217,6 +219,16 @@ export const TopNav: React.FC = () => {
           Failover Lab
         </Button>
 
+        {/* 3D Isometric BIM & Digital Twin */}
+        <Button
+          icon={<DeploymentUnitOutlined style={{ color: '#06b6d4' }} />}
+          size="small"
+          onClick={openDigitalTwinModal}
+          style={{ backgroundColor: '#1e293b', borderColor: '#06b6d4', color: '#f8fafc', fontSize: 12, fontWeight: 600 }}
+        >
+          3D BIM Twin
+        </Button>
+
         {/* Documentation & Reports Dropdown */}
         <Dropdown
           menu={{
@@ -232,6 +244,12 @@ export const TopNav: React.FC = () => {
                 icon: <AlertOutlined style={{ color: '#ef4444' }} />,
                 label: 'Disaster Recovery & Failover Simulator',
                 onClick: openFailoverModal
+              },
+              {
+                key: 'doc-twin',
+                icon: <DeploymentUnitOutlined style={{ color: '#06b6d4' }} />,
+                label: '3D Isometric BIM & Digital Twin',
+                onClick: openDigitalTwinModal
               },
               { type: 'divider' },
               {

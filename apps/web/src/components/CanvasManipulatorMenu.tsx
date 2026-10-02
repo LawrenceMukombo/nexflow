@@ -36,7 +36,8 @@ import {
   BookOutlined,
   CodeOutlined,
   BarChartOutlined,
-  AlertOutlined
+  AlertOutlined,
+  DeploymentUnitOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -91,6 +92,7 @@ export const EnterpriseMenuBar: React.FC = () => {
     openExportCenterModal,
     openAnalyticsModal,
     openFailoverModal,
+    openDigitalTwinModal,
     toggleValidationDrawer,
     validationIssues,
     openCliModal
@@ -557,6 +559,12 @@ export const EnterpriseMenuBar: React.FC = () => {
       icon: <AlertOutlined style={{ color: '#ef4444' }} />,
       label: 'Disaster Recovery & Failover Simulator...',
       onClick: openFailoverModal
+    },
+    {
+      key: 'tool-twin',
+      icon: <DeploymentUnitOutlined style={{ color: '#06b6d4' }} />,
+      label: '3D Isometric BIM & Digital Twin Viewer...',
+      onClick: openDigitalTwinModal
     },
     { type: 'divider' },
     {

@@ -10,3 +10,4 @@ export * from './solvers';
 export * from './dxfExporter';
 export * from './drawingSheet';
 export * from './failoverSimulator';
+export * from './isometricBim';

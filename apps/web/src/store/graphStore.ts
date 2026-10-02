@@ -152,6 +152,7 @@ export interface GraphState {
   isExportCenterModalOpen: boolean;
   isAnalyticsModalOpen: boolean;
   isFailoverModalOpen: boolean;
+  isDigitalTwinModalOpen: boolean;
   failoverTelemetry: FailoverTelemetry;
   engineeringStatus: 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'LOCKED';
   designRevisions: DesignRevision[];
@@ -268,6 +269,9 @@ export interface GraphState {
   toggleAnalyticsModal: (open?: boolean) => void;
   openFailoverModal: () => void;
   closeFailoverModal: () => void;
+  openDigitalTwinModal: () => void;
+  closeDigitalTwinModal: () => void;
+  toggleDigitalTwinModal: (open?: boolean) => void;
   selectFailoverScenario: (scenarioId: FailoverScenarioId) => void;
   toggleFailoverSimulation: (running?: boolean) => void;
   stepFailoverTick: (dtSec?: number) => void;
@@ -461,6 +465,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isExportCenterModalOpen: false,
   isAnalyticsModalOpen: false,
   isFailoverModalOpen: false,
+  isDigitalTwinModalOpen: false,
   failoverTelemetry: createInitialFailoverTelemetry('GRID_OUTAGE_ATS_FAILOVER'),
   engineeringStatus: 'DRAFT',
   designRevisions: [
@@ -1918,6 +1923,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   closeFailoverModal: () => set((state) => ({ 
     isFailoverModalOpen: false, 
     failoverTelemetry: { ...state.failoverTelemetry, isRunning: false } 
+  })),
+  openDigitalTwinModal: () => set({ isDigitalTwinModalOpen: true }),
+  closeDigitalTwinModal: () => set({ isDigitalTwinModalOpen: false }),
+  toggleDigitalTwinModal: (open) => set((state) => ({
+    isDigitalTwinModalOpen: open !== undefined ? open : !state.isDigitalTwinModalOpen
   })),
   selectFailoverScenario: (scenarioId) => set({
     failoverTelemetry: createInitialFailoverTelemetry(scenarioId)
