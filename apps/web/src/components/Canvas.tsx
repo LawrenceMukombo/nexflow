@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
-import { Tag, Badge, message, Dropdown, MenuProps, Button, Tooltip } from 'antd';
+import { Tag, Badge, message, Dropdown, MenuProps, Button, Tooltip, Space } from 'antd';
 import { 
   PlusOutlined,
   MinusOutlined,
@@ -31,11 +31,13 @@ import {
   CodeOutlined,
   LockOutlined,
   MessageOutlined,
-  TeamOutlined
+  TeamOutlined,
+  FolderOpenOutlined,
+  UploadOutlined
 } from '@ant-design/icons';
 import { ComponentPort, EngineeringComponent, EngineeringConnection } from '@omniflow/shared-types';
 import { checkNodeNetworkConfig } from '@omniflow/network-engine';
-import { ComponentIcon } from './ComponentIcon';
+import { ComponentIcon, NexFlowBrandIcon } from './ComponentIcon';
 
 export const Canvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,8 +115,12 @@ export const Canvas: React.FC = () => {
     stepCollabPresenceTick,
     acquireNodeLock,
     releaseNodeLock,
-    openCollabDrawer
+    openCollabDrawer,
+    openRecentProjectsModal,
+    importProjectFromFile
   } = useGraphStore();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isNodeVisible = useCallback((node: EngineeringComponent) => {
     if (domainFilterMode === 'ALL_DOMAINS') return true;
@@ -174,6 +180,9 @@ export const Canvas: React.FC = () => {
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         selectAllNodes();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        openRecentProjectsModal();
       } else if (e.key === 'Escape') {
         clearSelection();
         setContextMenu(null);
@@ -195,7 +204,8 @@ export const Canvas: React.FC = () => {
     duplicateSelectedComponents, 
     selectAllNodes, 
     clearSelection, 
-    cancelConnection
+    cancelConnection,
+    openRecentProjectsModal
   ]);
 
   // Real-Time Peer Collaborator Presence Movement Tick
@@ -2605,6 +2615,91 @@ export const Canvas: React.FC = () => {
           <Button size="small" type="text" onClick={clearSelection} style={{ color: '#94a3b8' }}>
             ✕
           </Button>
+        </div>
+      )}
+
+      {/* 8. Empty Canvas State & Quick Action Prompt */}
+      {Object.keys(graph.nodes).length === 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+            maxWidth: 520,
+            padding: '32px 36px',
+            backgroundColor: 'rgba(11, 17, 30, 0.85)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(51, 65, 85, 0.7)',
+            borderRadius: 16,
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65)',
+            pointerEvents: 'auto',
+            zIndex: 15
+          }}
+        >
+          <div style={{ marginBottom: 14 }}>
+            <NexFlowBrandIcon size={46} />
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc', marginBottom: 6 }}>
+            Canvas is Ready for Design
+          </div>
+          <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5, marginBottom: 20 }}>
+            Start drafting by dragging components from the left hardware catalog, open a recently saved blueprint, or import an existing engineering topology.
+          </div>
+          <Space size={12} wrap style={{ justifyContent: 'center' }}>
+            <Button
+              type="primary"
+              icon={<FolderOpenOutlined />}
+              onClick={openRecentProjectsModal}
+              style={{ backgroundColor: '#0284c7', borderColor: 'transparent', fontWeight: 600, height: 36 }}
+            >
+              Open Recent Project
+            </Button>
+            <Button
+              icon={<UploadOutlined />}
+              onClick={() => fileInputRef.current?.click()}
+              style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc', fontWeight: 500, height: 36 }}
+            >
+              Open File (.json)
+            </Button>
+            <Button
+              icon={<BuildOutlined />}
+              onClick={() => toggleWizardModal(true)}
+              style={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#38bdf8', fontWeight: 500, height: 36 }}
+            >
+              Architecture Wizard
+            </Button>
+          </Space>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".json"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const text = ev.target?.result as string;
+                  if (text) {
+                    const res = importProjectFromFile(text);
+                    if (res.success) {
+                      message.success(res.message);
+                    } else {
+                      message.error(res.message);
+                    }
+                  }
+                };
+                reader.readAsText(file);
+              }
+              e.target.value = '';
+            }}
+          />
         </div>
       )}
 

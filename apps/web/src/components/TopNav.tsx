@@ -18,7 +18,8 @@ import {
   AlertOutlined,
   DeploymentUnitOutlined,
   TeamOutlined,
-  BranchesOutlined
+  BranchesOutlined,
+  FolderOpenOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -39,7 +40,7 @@ export const TopNav: React.FC = () => {
     toggleCableScheduleModal,
     toggleWizardModal,
     toggleLibraryModal,
-    toggleProjectsModal,
+    openRecentProjectsModal,
     openDesignReportModal,
     openVersionDiffModal,
     openExportCenterModal,
@@ -145,11 +146,19 @@ export const TopNav: React.FC = () => {
               color: '#38bdf8',
               margin: 0
             }}
-            onClick={() => toggleProjectsModal(true)}
-            title="Click to manage saved projects"
+            onClick={openRecentProjectsModal}
+            title="Click to open recent blueprints & projects launcher"
           >
             📁 {currentProjectName} {isProjectDirty ? '•' : ''}
           </Tag>
+          <Tooltip title="Open Recent Blueprints & Files (Ctrl+O)">
+            <Button
+              type="text"
+              size="small"
+              icon={<FolderOpenOutlined style={{ color: '#38bdf8', fontSize: 13 }} />}
+              onClick={openRecentProjectsModal}
+            />
+          </Tooltip>
           <Tooltip title="Quick Save (Ctrl+S)">
             <Button
               type="text"

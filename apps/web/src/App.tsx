@@ -26,6 +26,7 @@ import { CollaborationDrawer } from './components/CollaborationDrawer';
 import { NetworkIpamModal } from './components/NetworkIpamModal';
 import { PacketTracerSimulationBar } from './components/PacketTracerSimulationBar';
 import { PduInspectorModal } from './components/PduInspectorModal';
+import { RecentProjectsLauncherModal } from './components/RecentProjectsLauncherModal';
 import { useGraphStore } from './store/graphStore';
 
 export const App: React.FC = () => {
@@ -35,14 +36,8 @@ export const App: React.FC = () => {
   const { 
     isSimulating, 
     simulationSpeed, 
-    tickSimulation, 
-    loadDemoTopology 
+    tickSimulation 
   } = useGraphStore();
-
-  // Load baseline demonstration topology on first mount
-  useEffect(() => {
-    loadDemoTopology();
-  }, [loadDemoTopology]);
 
   // Simulation tick loop
   useEffect(() => {
@@ -109,6 +104,7 @@ export const App: React.FC = () => {
         <CreateComponentModal />
         <SaveAssemblyModal />
         <ProjectsManagerModal />
+        <RecentProjectsLauncherModal />
         <QuickEditModal />
         <DesignReportModal />
         <VersionDiffModal />

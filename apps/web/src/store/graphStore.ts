@@ -273,6 +273,10 @@ export interface GraphState {
   exportProjectToFile: (projectId: string) => void;
   setCurrentProjectName: (name: string) => void;
   createNewBlankProject: (name?: string) => void;
+  isRecentProjectsModalOpen: boolean;
+  openRecentProjectsModal: () => void;
+  closeRecentProjectsModal: () => void;
+  toggleRecentProjectsModal: (open?: boolean) => void;
 
   // Milestone 3: Engineering Delivery Actions
   openDesignReportModal: () => void;
@@ -488,7 +492,7 @@ function persistProjects(projects: SavedProject[]) {
 const initialProjects = getStoredProjects();
 
 export const useGraphStore = create<GraphState>((set, get) => ({
-  graph: initialProjects[0]?.graph || initialGraph,
+  graph: initialGraph,
   activeDomain: 'NETWORK',
   domainFilterMode: 'ACTIVE_ONLY',
   selectedNodeId: null,
@@ -507,6 +511,7 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   isCreateComponentModalOpen: false,
   isSaveAssemblyModalOpen: false,
   isProjectsModalOpen: false,
+  isRecentProjectsModalOpen: true,
   isQuickEditModalOpen: false,
   quickEditNodeId: null,
   isCliModalOpen: false,
@@ -555,16 +560,16 @@ export const useGraphStore = create<GraphState>((set, get) => ({
   showPacketLabels: false,
   flowDensity: 'CALM',
 
-  currentProjectId: initialProjects[0]?.id || 'proj_default',
-  currentProjectName: initialProjects[0]?.name || 'Corporate HQ Network Blueprint',
+  currentProjectId: 'proj_blank_default',
+  currentProjectName: 'Untitled Engineering Project',
   savedProjects: initialProjects,
   isProjectDirty: false,
 
   libraries: BUILTIN_LIBRARIES,
   activeLibraryId: 'lib_cisco_enterprise',
 
-  isSimulating: true, // Default to true so flowing packets, electrical current, and fluids are immediately visible!
-  simulationSpeed: 0.5, // Calm, smooth default visual flow speed
+  isSimulating: false,
+  simulationSpeed: 0.5,
   simulationTick: 0,
   activePackets: [],
   telemetry: initialTelemetry,
@@ -2829,5 +2834,11 @@ export const useGraphStore = create<GraphState>((set, get) => ({
     dlAnchor.setAttribute('href', dataStr);
     dlAnchor.setAttribute('download', `${proj.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_v1.0.json`);
     dlAnchor.click();
-  }
+  },
+
+  openRecentProjectsModal: () => set({ isRecentProjectsModalOpen: true }),
+  closeRecentProjectsModal: () => set({ isRecentProjectsModalOpen: false }),
+  toggleRecentProjectsModal: (open) => set((state) => ({
+    isRecentProjectsModalOpen: open !== undefined ? open : !state.isRecentProjectsModalOpen
+  }))
 }));

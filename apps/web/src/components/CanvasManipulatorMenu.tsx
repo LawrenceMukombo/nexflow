@@ -38,7 +38,10 @@ import {
   BarChartOutlined,
   AlertOutlined,
   DeploymentUnitOutlined,
-  TeamOutlined
+  TeamOutlined,
+  FolderOpenOutlined,
+  FileAddOutlined,
+  SaveOutlined
 } from '@ant-design/icons';
 import { useGraphStore, isComponentInDomain } from '../store/graphStore';
 import { EngineeringDomain } from '@omniflow/shared-types';
@@ -98,12 +101,67 @@ export const EnterpriseMenuBar: React.FC = () => {
     openIpamModal,
     toggleValidationDrawer,
     validationIssues,
-    openCliModal
+    openCliModal,
+    openRecentProjectsModal,
+    createNewBlankProject,
+    saveCurrentProject,
+    exportProjectToFile,
+    currentProjectId
   } = useGraphStore();
 
   const allNodes = Object.values(graph.nodes);
   const domainNodes = allNodes.filter(n => isComponentInDomain(n, activeDomain));
   const visibleNodes = domainFilterMode === 'ALL_DOMAINS' ? allNodes : domainNodes;
+
+  // ─────────────────────────────────────────────────────────────
+  // 0. FILE MENU
+  // ─────────────────────────────────────────────────────────────
+  const fileMenuItems: MenuProps['items'] = [
+    {
+      key: 'file-recent',
+      icon: <FolderOpenOutlined style={{ color: '#38bdf8' }} />,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span style={{ fontWeight: 600 }}>Recent Blueprints & Projects...</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Ctrl+O</span>
+        </div>
+      ),
+      onClick: openRecentProjectsModal
+    },
+    {
+      key: 'file-blank',
+      icon: <FileAddOutlined style={{ color: '#10b981' }} />,
+      label: 'New Blank Canvas',
+      onClick: () => {
+        createNewBlankProject();
+        message.info('Clean blank canvas ready');
+      }
+    },
+    {
+      key: 'file-save',
+      icon: <SaveOutlined style={{ color: '#f59e0b' }} />,
+      label: (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+          <span>Save Current Blueprint</span>
+          <span style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>Ctrl+S</span>
+        </div>
+      ),
+      onClick: () => {
+        saveCurrentProject();
+        message.success('Project saved to local storage');
+      }
+    },
+    { type: 'divider' },
+    {
+      key: 'file-export',
+      icon: <ExportOutlined style={{ color: '#a855f7' }} />,
+      label: 'Export Project to JSON...',
+      onClick: () => {
+        exportProjectToFile(currentProjectId);
+        message.success('Downloading project JSON');
+      }
+    }
+  ];
 
   // ─────────────────────────────────────────────────────────────
   // 1. EDIT MENU
@@ -701,6 +759,13 @@ export const EnterpriseMenuBar: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* File Menu */}
+      <Dropdown menu={{ items: fileMenuItems }} trigger={['click']} placement="bottomLeft">
+        <Button type="text" size="small" style={{ ...menuItemBtnStyle, color: '#f8fafc', fontWeight: 600 }}>
+          File <DownOutlined style={{ fontSize: 9, color: '#64748b' }} />
+        </Button>
+      </Dropdown>
+
       {/* Edit Menu */}
       <Dropdown menu={{ items: editMenuItems }} trigger={['click']} placement="bottomLeft">
         <Button type="text" size="small" style={menuItemBtnStyle}>
