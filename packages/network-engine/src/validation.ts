@@ -3,21 +3,222 @@ import { solveElectricalNetwork } from './solvers/electricalSolver';
 import { solveHydraulicNetwork } from './solvers/hydraulicSolver';
 import { solveSolarNetwork } from './solvers/solarSolver';
 
+export type IPv4Class = 'A' | 'B' | 'C' | 'D' | 'E' | 'INVALID';
+
+export interface IPv4Diagnostic {
+  isValid: boolean;
+  error?: string;
+  suggestedFix?: string;
+  cleanedIp?: string;
+  classType?: IPv4Class;
+  isPrivate?: boolean;
+  isLoopback?: boolean;
+  isMulticast?: boolean;
+  isReserved?: boolean;
+  defaultSubnetMask?: string;
+}
+
+/**
+ * Returns the default classful subnet mask used by Cisco Packet Tracer
+ */
+export function getPacketTracerDefaultMask(firstOctet: number): string {
+  if (firstOctet >= 1 && firstOctet <= 126) return '255.0.0.0'; // Class A
+  if (firstOctet >= 128 && firstOctet <= 191) return '255.255.0.0'; // Class B
+  if (firstOctet >= 192 && firstOctet <= 223) return '255.255.255.0'; // Class C
+  return '255.255.255.0';
+}
+
+/**
+ * Identifies the IPv4 address class (A, B, C, D, E) per Cisco networking standards
+ */
+export function getIpClass(firstOctet: number): IPv4Class {
+  if (firstOctet >= 1 && firstOctet <= 126) return 'A';
+  if (firstOctet >= 128 && firstOctet <= 191) return 'B';
+  if (firstOctet >= 192 && firstOctet <= 223) return 'C';
+  if (firstOctet >= 224 && firstOctet <= 239) return 'D';
+  if (firstOctet >= 240 && firstOctet <= 255) return 'E';
+  return 'INVALID';
+}
+
+/**
+ * Determines whether an IP is in RFC 1918 Private or RFC 3927 Link-Local range
+ */
+export function isPrivateIp(ip: string): boolean {
+  if (!ip || typeof ip !== 'string') return false;
+  const parts = ip.trim().split('.').map(Number);
+  if (parts.length !== 4) return false;
+  const [o1, o2] = parts;
+  if (o1 === 10) return true; // 10.0.0.0/8 (Class A Private)
+  if (o1 === 172 && o2 >= 16 && o2 <= 31) return true; // 172.16.0.0/12 (Class B Private)
+  if (o1 === 192 && o2 === 168) return true; // 192.168.0.0/16 (Class C Private)
+  if (o1 === 169 && o2 === 254) return true; // 169.254.0.0/16 (APIPA)
+  return false;
+}
+
+/**
+ * Normalizes user-entered subnet prefixes, stripping consecutive or trailing dots and CIDR masks
+ */
+export function normalizeSubnetPrefix(rawPrefix?: string): string {
+  if (!rawPrefix || typeof rawPrefix !== 'string') return '192.168.10';
+  let cleaned = rawPrefix.trim();
+  // Strip CIDR mask e.g. /24
+  if (cleaned.includes('/')) {
+    cleaned = cleaned.split('/')[0].trim();
+  }
+  // Replace multiple consecutive dots with a single dot
+  cleaned = cleaned.replace(/\.+/g, '.');
+  // Strip trailing dots
+  cleaned = cleaned.replace(/\.+$/, '');
+  // Strip leading dots
+  cleaned = cleaned.replace(/^\.+/, '');
+
+  const parts = cleaned.split('.').filter(Boolean);
+  if (parts.length >= 4) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}`;
+  } else if (parts.length === 3) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}`;
+  } else if (parts.length === 2) {
+    return `${parts[0]}.${parts[1]}.0`;
+  } else if (parts.length === 1 && parts[0]) {
+    return `${parts[0]}.0.0`;
+  }
+  return '192.168.10';
+}
+
+/**
+ * Cisco Packet Tracer standard IPv4 address validator & classifier
+ */
+export function validatePacketTracerIPv4(ip: string, subnetMask?: string): IPv4Diagnostic {
+  if (!ip || typeof ip !== 'string' || !ip.trim()) {
+    return { isValid: false, error: 'IP address cannot be empty.' };
+  }
+
+  const trimmed = ip.trim();
+
+  // Check for consecutive or misplaced dots (e.g. "10.28.16..109")
+  if (trimmed.includes('..') || trimmed.startsWith('.') || trimmed.endsWith('.')) {
+    const cleaned = trimmed.replace(/\.+/g, '.').replace(/^\.+|\.+$/g, '');
+    const candidateParts = cleaned.split('.');
+    const isCleanedValid = candidateParts.length === 4 && candidateParts.every(p => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+    return {
+      isValid: false,
+      error: `IP address "${trimmed}" contains consecutive or misplaced dots.`,
+      cleanedIp: isCleanedValid ? cleaned : undefined,
+      suggestedFix: isCleanedValid ? `Use "${cleaned}" instead.` : 'Enter a valid 4-octet IPv4 address (e.g. 10.0.0.1, 172.16.1.1, 192.168.1.1, or 213.180.45.1).'
+    };
+  }
+
+  const parts = trimmed.split('.');
+  if (parts.length !== 4) {
+    return {
+      isValid: false,
+      error: `IPv4 address must consist of exactly 4 octets separated by dots (e.g. 10.0.0.1, 172.16.1.1, 192.168.1.1, or 213.180.45.1). Found ${parts.length} octet(s).`
+    };
+  }
+
+  const octets: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const p = parts[i];
+    if (!/^\d{1,3}$/.test(p)) {
+      return { isValid: false, error: `Octet ${i + 1} ("${p}") is invalid: only numeric digits 0-9 are permitted.` };
+    }
+    const val = Number(p);
+    if (val < 0 || val > 255) {
+      return { isValid: false, error: `Octet ${i + 1} (${val}) is out of range: must be between 0 and 255.` };
+    }
+    octets.push(val);
+  }
+
+  const first = octets[0];
+
+  // Packet Tracer validation: Host interface cannot be 0.x.x.x
+  if (first === 0) {
+    return {
+      isValid: false,
+      error: `IP addresses starting with 0 (${trimmed}) are not valid host addresses (RFC 1122).`,
+      suggestedFix: 'Use a valid host address in Class A (1-126), Class B (128-191), or Class C (192-223).'
+    };
+  }
+
+  // Loopback (127.0.0.0/8)
+  if (first === 127) {
+    return {
+      isValid: false,
+      isLoopback: true,
+      error: `IP address ${trimmed} is in the 127.0.0.0/8 range, which is reserved for loopback and cannot be assigned to an interface.`,
+      suggestedFix: 'Assign an address from the local subnet (e.g. 10.x.x.x, 172.16.x.x, 192.168.x.x, or 213.x.x.x).'
+    };
+  }
+
+  // Class D Multicast (224.0.0.0 - 239.255.255.255)
+  if (first >= 224 && first <= 239) {
+    return {
+      isValid: false,
+      isMulticast: true,
+      classType: 'D',
+      error: `IP address ${trimmed} is a Class D Multicast address (224.0.0.0 - 239.255.255.255) and cannot be assigned to a host interface.`,
+      suggestedFix: 'Assign a standard unicast host address (Class A, B, or C).'
+    };
+  }
+
+  // Class E Experimental / Broadcast (240.0.0.0 - 255.255.255.255)
+  if (first >= 240) {
+    return {
+      isValid: false,
+      isReserved: true,
+      classType: 'E',
+      error: `IP address ${trimmed} is in the Class E / Broadcast reserved range (240.0.0.0 - 255.255.255.255) and cannot be assigned to a host.`,
+      suggestedFix: 'Assign a valid unicast host address.'
+    };
+  }
+
+  const classType = getIpClass(first);
+  const defaultSubnetMask = getPacketTracerDefaultMask(first);
+  const isPrivate = isPrivateIp(trimmed);
+
+  // If a subnet mask is specified, verify network & broadcast address rules
+  if (subnetMask) {
+    const maskLong = parseSubnetMask(subnetMask);
+    const ipLong = ipToLong(trimmed);
+    const netLong = (ipLong & maskLong) >>> 0;
+    const broadcastLong = (netLong | (~maskLong >>> 0)) >>> 0;
+
+    if (ipLong === netLong) {
+      return {
+        isValid: false,
+        classType,
+        isPrivate,
+        defaultSubnetMask,
+        error: `${trimmed} is the Subnet Network Address and cannot be assigned to a host interface.`,
+        suggestedFix: `Use a valid host address in this subnet (e.g. ${longToIp((netLong + 1) >>> 0)}).`
+      };
+    }
+
+    if (ipLong === broadcastLong) {
+      return {
+        isValid: false,
+        classType,
+        isPrivate,
+        defaultSubnetMask,
+        error: `${trimmed} is the Subnet Directed Broadcast Address and cannot be assigned to a host interface.`,
+        suggestedFix: `Use a valid host address in this subnet (e.g. ${longToIp((broadcastLong - 1) >>> 0)}).`
+      };
+    }
+  }
+
+  return {
+    isValid: true,
+    classType,
+    isPrivate,
+    defaultSubnetMask
+  };
+}
+
 /**
  * Validate IPv4 dot-decimal syntax
  */
-export function isValidIPv4(ip: string): boolean {
-  if (!ip || typeof ip !== 'string') return false;
-  const parts = ip.trim().split('.');
-  if (parts.length !== 4) return false;
-  for (const part of parts) {
-    if (!/^\d{1,3}$/.test(part)) return false;
-    const n = Number(part);
-    if (n < 0 || n > 255) return false;
-  }
-  // Disallow 0.0.0.0 and 255.255.255.255 as usable host IPs
-  if (ip === '0.0.0.0' || ip === '255.255.255.255') return false;
-  return true;
+export function isValidIPv4(ip: string, subnetMask?: string): boolean {
+  return validatePacketTracerIPv4(ip, subnetMask).isValid;
 }
 
 /**
@@ -54,7 +255,9 @@ export function parseSubnetMask(mask?: string): number {
       return bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
     }
   }
-  if (isValidIPv4(trimmed)) {
+  // Check basic numeric format before validating
+  const parts = trimmed.split('.');
+  if (parts.length === 4 && parts.every(p => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255)) {
     return ipToLong(trimmed);
   }
   return 0xffffff00;
@@ -73,13 +276,25 @@ export function areInSameSubnet(ip1: string, ip2: string, mask: string = '255.25
  * Derives a valid IP within the target subnet preserving the host octet where possible
  */
 export function getSuggestedIpForSubnet(targetSubnetIp: string, currentHostIp: string): string {
-  if (!isValidIPv4(targetSubnetIp)) return '192.168.1.100';
-  const targetParts = targetSubnetIp.trim().split('.');
+  const cleanTarget = targetSubnetIp ? targetSubnetIp.trim().replace(/\.+/g, '.') : '';
+  if (!isValidIPv4(cleanTarget)) {
+    const prefix = normalizeSubnetPrefix(targetSubnetIp);
+    return `${prefix}.100`;
+  }
+  const targetParts = cleanTarget.split('.');
   let lastOctet = '100';
-  if (isValidIPv4(currentHostIp)) {
-    const currentLast = currentHostIp.trim().split('.').pop() || '100';
-    // If current last octet equals target gateway last octet, increment
-    lastOctet = currentLast === targetParts[3] ? '101' : currentLast;
+  const cleanHost = currentHostIp ? currentHostIp.trim().replace(/\.+/g, '.') : '';
+  if (cleanHost) {
+    const hostParts = cleanHost.split('.');
+    const candidateLast = hostParts[hostParts.length - 1];
+    if (/^\d{1,3}$/.test(candidateLast)) {
+      const n = Number(candidateLast);
+      if (n >= 1 && n <= 254 && candidateLast !== targetParts[3]) {
+        lastOctet = candidateLast;
+      } else if (candidateLast === targetParts[3]) {
+        lastOctet = n < 254 ? String(n + 1) : '100';
+      }
+    }
   }
   return `${targetParts[0]}.${targetParts[1]}.${targetParts[2]}.${lastOctet}`;
 }
@@ -117,15 +332,21 @@ export function checkNodeNetworkConfig(
     return { isValid: true, canConnect: true, statusText: 'ONLINE' };
   }
 
-  // 1. Validate IPv4 Syntax
-  if (!isValidIPv4(ip)) {
+  const mask = (node.properties.subnetMask as string) || '255.255.255.0';
+  const gw = node.properties.defaultGateway as string;
+
+  // 1. Validate IPv4 Syntax using Packet Tracer validation rules
+  const diag = validatePacketTracerIPv4(ip, mask);
+  if (!diag.isValid) {
+    const errorMsg = diag.error || `A valid IPv4 host address (e.g. 10.x.x.x, 172.16.x.x, 192.168.x.x, or 213.x.x.x) is required.`;
     return {
       isValid: false,
       canConnect: false,
       statusText: 'INVALID_IP',
-      reason: `Device '${node.name}' has an invalid IP address: "${ip}". A valid IPv4 address (e.g. 192.168.1.100) is required.`,
+      reason: `Device '${node.name}' has an invalid IP address: "${ip}". ${errorMsg}`,
       errorCode: 'NET_INVALID_IP',
-      suggestedFix: 'Enter a valid IPv4 address in dot-decimal format (0-255 per octet).'
+      suggestedFix: diag.suggestedFix || 'Enter a valid IPv4 address in dot-decimal format (0-255 per octet).',
+      suggestedIp: diag.cleanedIp
     };
   }
 
@@ -146,19 +367,17 @@ export function checkNodeNetworkConfig(
     }
   }
 
-  const mask = (node.properties.subnetMask as string) || '255.255.255.0';
-  const gw = node.properties.defaultGateway as string;
-
   // 3. Check Subnet Match with Configured Default Gateway
   if (gw) {
-    if (!isValidIPv4(gw)) {
+    const gwDiag = validatePacketTracerIPv4(gw);
+    if (!gwDiag.isValid) {
       return {
         isValid: false,
         canConnect: false,
         statusText: 'INVALID_IP',
-        reason: `Default Gateway "${gw}" on '${node.name}' is an invalid IPv4 address.`,
+        reason: `Default Gateway "${gw}" on '${node.name}' is an invalid IPv4 address: ${gwDiag.error || 'A valid IPv4 address is required.'}`,
         errorCode: 'NET_INVALID_IP',
-        suggestedFix: 'Configure a valid IPv4 Default Gateway.'
+        suggestedFix: gwDiag.suggestedFix || 'Configure a valid IPv4 Default Gateway.'
       };
     }
     if (!areInSameSubnet(ip, gw, mask)) {
@@ -318,7 +537,7 @@ export function validateNetworkGraph(graph: EngineeringGraph): ValidationIssue[]
           message: `Device '${node.name}' has an IP (${ip}) but no Default Gateway configured. It will be unable to route traffic beyond its local subnet.`,
           affectedNodeIds: [node.id],
           affectedConnectionIds: [],
-          suggestedFix: 'Configure Default Gateway (e.g. 192.168.1.1) in the Property Inspector.'
+          suggestedFix: 'Configure Default Gateway (e.g. 10.0.0.1, 172.16.1.1, 192.168.1.1, or 213.180.45.1) in the Property Inspector.'
         });
       }
     }

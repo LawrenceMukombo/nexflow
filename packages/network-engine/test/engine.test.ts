@@ -9,9 +9,15 @@ import {
   generateNetworkBOQ, 
   generateCableSchedule,
   checkNodeNetworkConfig,
-  areInSameSubnet
+  areInSameSubnet,
+  validatePacketTracerIPv4,
+  getPacketTracerDefaultMask,
+  getIpClass,
+  isPrivateIp,
+  normalizeSubnetPrefix,
+  isValidIPv4
 } from '../src/index';
-import { EngineeringGraph } from '@omniflow/shared-types';
+import { EngineeringGraph, SimulationPacket } from '@omniflow/shared-types';
 
 function assert(condition: boolean, msg: string) {
   if (!condition) {
@@ -202,6 +208,53 @@ const steppedState = stepNetworkSimulation(multiDomainGraph, {
 assert(steppedState.telemetry.totalPowerWatts !== undefined && steppedState.telemetry.totalPowerWatts > 0, 'Simulation telemetry calculates electrical power wattage');
 assert(steppedState.telemetry.totalFluidFlowRate !== undefined && steppedState.telemetry.totalFluidFlowRate > 0, 'Simulation telemetry calculates fluid flow rate');
 
-console.log('=== ALL 15 VERIFICATION TESTS PASSED SUCCESSFULLY ===');
+// 14. Cisco Packet Tracer IP Address & Subnet Engine Tests
+// A. Class A, B, C and Public IP Validity
+const ipClassA = validatePacketTracerIPv4('10.28.16.109');
+assert(ipClassA.isValid === true, '10.28.16.109 is a valid Class A Private IPv4 host address');
+assert(ipClassA.classType === 'A', '10.28.16.109 identified as Class A');
+assert(ipClassA.isPrivate === true, '10.28.16.109 identified as RFC 1918 Private IP');
+assert(getPacketTracerDefaultMask(10) === '255.0.0.0', 'Class A default subnet mask is 255.0.0.0');
+
+const ipClassB = validatePacketTracerIPv4('172.16.10.5');
+assert(ipClassB.isValid === true, '172.16.10.5 is a valid Class B Private IPv4 host address');
+assert(ipClassB.classType === 'B', '172.16.10.5 identified as Class B');
+assert(ipClassB.isPrivate === true, '172.16.10.5 identified as RFC 1918 Private IP');
+assert(getPacketTracerDefaultMask(172) === '255.255.0.0', 'Class B default subnet mask is 255.255.0.0');
+
+const ipClassCPrivate = validatePacketTracerIPv4('192.168.1.100');
+assert(ipClassCPrivate.isValid === true, '192.168.1.100 is a valid Class C Private IPv4 host address');
+assert(ipClassCPrivate.classType === 'C', '192.168.1.100 identified as Class C');
+assert(ipClassCPrivate.isPrivate === true, '192.168.1.100 identified as RFC 1918 Private IP');
+
+// Public IP support (e.g. 213.xxx.xxx.xxx)
+const ipClassCPublic = validatePacketTracerIPv4('213.180.45.109');
+assert(ipClassCPublic.isValid === true, '213.180.45.109 is a valid Class C Public IPv4 host address');
+assert(ipClassCPublic.classType === 'C', '213.180.45.109 identified as Class C');
+assert(ipClassCPublic.isPrivate === false, '213.180.45.109 identified as Public Internet routable IP');
+
+// B. Consecutive Dots Diagnosis & Auto-Fixing (e.g. "10.28.16..109")
+const badDoubleDot = validatePacketTracerIPv4('10.28.16..109');
+assert(badDoubleDot.isValid === false, '10.28.16..109 correctly flagged as invalid due to consecutive dots');
+assert(badDoubleDot.cleanedIp === '10.28.16.109', '10.28.16..109 automatically diagnosed and cleaned to 10.28.16.109');
+
+// C. Subnet Prefix Normalization
+assert(normalizeSubnetPrefix('10.28.16.') === '10.28.16', '10.28.16. normalized to 10.28.16 (stripped trailing dot)');
+assert(normalizeSubnetPrefix('10.28.16..') === '10.28.16', '10.28.16.. normalized to 10.28.16 (stripped multiple trailing dots)');
+assert(normalizeSubnetPrefix('10.28.16.0') === '10.28.16', '10.28.16.0 normalized to 10.28.16');
+assert(normalizeSubnetPrefix('10.28.16.0/24') === '10.28.16', '10.28.16.0/24 normalized to 10.28.16');
+assert(normalizeSubnetPrefix('213.180.45.') === '213.180.45', '213.180.45. normalized to 213.180.45');
+
+// D. Special and Reserved IP Enforcement (Packet Tracer rules)
+assert(validatePacketTracerIPv4('0.0.0.0').isValid === false, '0.0.0.0 rejected as unusable host IP');
+assert(validatePacketTracerIPv4('127.0.0.1').isValid === false, '127.0.0.1 rejected as loopback');
+assert(validatePacketTracerIPv4('224.0.0.1').isValid === false, '224.0.0.1 rejected as multicast (Class D)');
+assert(validatePacketTracerIPv4('245.0.0.1').isValid === false, '245.0.0.1 rejected as reserved (Class E)');
+
+// E. Network and Broadcast Address Enforcement in Subnet
+assert(validatePacketTracerIPv4('10.28.16.0', '255.255.255.0').isValid === false, '10.28.16.0 rejected as Subnet Network Address');
+assert(validatePacketTracerIPv4('10.28.16.255', '255.255.255.0').isValid === false, '10.28.16.255 rejected as Subnet Directed Broadcast Address');
+
+console.log('=== ALL 16 VERIFICATION SUITES PASSED SUCCESSFULLY ===');
 
 

@@ -202,15 +202,15 @@ export const QuickEditModal: React.FC = () => {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Form.Item name="ipAddress" label={<span style={{ color: '#cbd5e1' }}>IP Address</span>}>
-                <Input placeholder="192.168.1.1" />
+                <Input placeholder="e.g. 10.0.0.10, 172.16.1.10, 192.168.1.1, or 213.180.45.1" />
               </Form.Item>
               <Form.Item name="subnetMask" label={<span style={{ color: '#cbd5e1' }}>Subnet Mask</span>}>
-                <Input placeholder="255.255.255.0" />
+                <Input placeholder="e.g. 255.0.0.0, 255.255.0.0, 255.255.255.0" />
               </Form.Item>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Form.Item name="gateway" label={<span style={{ color: '#cbd5e1' }}>Default Gateway</span>}>
-                <Input placeholder="192.168.1.254" />
+                <Input placeholder="e.g. 10.0.0.1, 172.16.1.1, 192.168.1.254, or 213.180.45.1" />
               </Form.Item>
               <Form.Item name="vlanId" label={<span style={{ color: '#cbd5e1' }}>Management VLAN</span>}>
                 <InputNumber min={1} max={4094} style={{ width: '100%' }} />

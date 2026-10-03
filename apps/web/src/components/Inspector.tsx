@@ -27,7 +27,11 @@ import {
   checkNodeNetworkConfig,
   solveElectricalNetwork,
   solveHydraulicNetwork,
-  solveSolarNetwork
+  solveSolarNetwork,
+  validatePacketTracerIPv4,
+  getPacketTracerDefaultMask,
+  getIpClass,
+  isValidIPv4
 } from '@omniflow/network-engine';
 import { executeCliCommand } from '../utils/cliNetworkEngine';
 import { ComponentIcon } from './ComponentIcon';
@@ -692,31 +696,70 @@ export const Inspector: React.FC = () => {
             children: (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {/* IP Address */}
-                {(selectedNode!.properties.ipAddress !== undefined || selectedNode!.properties.lanIp !== undefined) && (
-                  <div>
-                    <Text style={{ fontSize: 11, color: '#94a3b8' }}>IP ADDRESS</Text>
-                    <Input
-                      value={(selectedNode!.properties.ipAddress || selectedNode!.properties.lanIp) as string}
-                      onChange={(e) => {
-                        const key = selectedNode!.properties.lanIp !== undefined ? 'lanIp' : 'ipAddress';
-                        updateComponentProperties(selectedNode!.id, { [key]: e.target.value });
-                      }}
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                  </div>
-                )}
+                {(selectedNode!.properties.ipAddress !== undefined || selectedNode!.properties.lanIp !== undefined) && (() => {
+                  const currentIp = ((selectedNode!.properties.ipAddress || selectedNode!.properties.lanIp) as string) || '';
+                  const diag = validatePacketTracerIPv4(currentIp);
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 11, color: '#94a3b8' }}>IP ADDRESS</Text>
+                        {diag.isValid && (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <Tag color="cyan" style={{ fontSize: 9.5, margin: 0, padding: '0 4px' }}>
+                              Class {diag.classType}
+                            </Tag>
+                            <Tag color={diag.isPrivate ? 'blue' : 'gold'} style={{ fontSize: 9.5, margin: 0, padding: '0 4px' }}>
+                              {diag.isPrivate ? 'Private' : 'Public'}
+                            </Tag>
+                          </div>
+                        )}
+                      </div>
+                      <Input
+                        value={currentIp}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const key = selectedNode!.properties.lanIp !== undefined ? 'lanIp' : 'ipAddress';
+                          const updates: Record<string, unknown> = { [key]: val };
+                          if (isValidIPv4(val) && !selectedNode!.properties.subnetMask) {
+                            updates.subnetMask = getPacketTracerDefaultMask(Number(val.split('.')[0]));
+                          }
+                          updateComponentProperties(selectedNode!.id, updates);
+                        }}
+                        placeholder="e.g. 10.0.0.10, 172.16.1.10, 192.168.1.10, or 213.180.45.10"
+                        style={{ fontFamily: 'monospace' }}
+                      />
+                    </div>
+                  );
+                })()}
 
                 {/* Subnet Mask */}
-                {selectedNode!.properties.subnetMask !== undefined && (
-                  <div>
-                    <Text style={{ fontSize: 11, color: '#94a3b8' }}>SUBNET MASK</Text>
-                    <Input
-                      value={selectedNode!.properties.subnetMask as string}
-                      onChange={(e) => updateComponentProperties(selectedNode!.id, { subnetMask: e.target.value })}
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                  </div>
-                )}
+                {selectedNode!.properties.subnetMask !== undefined && (() => {
+                  const currentIp = ((selectedNode!.properties.ipAddress || selectedNode!.properties.lanIp) as string) || '';
+                  const firstOct = Number(currentIp.split('.')[0]);
+                  const defaultMask = isValidIPv4(currentIp) ? getPacketTracerDefaultMask(firstOct) : '255.255.255.0';
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 11, color: '#94a3b8' }}>SUBNET MASK</Text>
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() => updateComponentProperties(selectedNode!.id, { subnetMask: defaultMask })}
+                          style={{ fontSize: 10, padding: 0, height: 'auto', color: '#38bdf8' }}
+                          title={`Auto-fill standard Class ${getIpClass(firstOct)} mask`}
+                        >
+                          Default ({defaultMask})
+                        </Button>
+                      </div>
+                      <Input
+                        value={selectedNode!.properties.subnetMask as string}
+                        onChange={(e) => updateComponentProperties(selectedNode!.id, { subnetMask: e.target.value })}
+                        style={{ fontFamily: 'monospace' }}
+                        placeholder="e.g. 255.255.255.0, 255.255.0.0, 255.0.0.0"
+                      />
+                    </div>
+                  );
+                })()}
 
                 {/* Default Gateway */}
                 {selectedNode!.properties.defaultGateway !== undefined && (
@@ -726,6 +769,7 @@ export const Inspector: React.FC = () => {
                       value={selectedNode!.properties.defaultGateway as string}
                       onChange={(e) => updateComponentProperties(selectedNode!.id, { defaultGateway: e.target.value })}
                       style={{ fontFamily: 'monospace' }}
+                      placeholder="e.g. 10.0.0.1, 172.16.1.1, 192.168.1.1, or 213.180.45.1"
                     />
                   </div>
                 )}

@@ -24,7 +24,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons';
 import { useGraphStore } from '../store/graphStore';
-import { NetworkWizardOptions } from '@omniflow/network-engine';
+import { NetworkWizardOptions, normalizeSubnetPrefix, getIpClass, isPrivateIp } from '@omniflow/network-engine';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -78,11 +78,16 @@ export const NetworkWizardModal: React.FC = () => {
     }
   ];
 
+  const cleanPrefix = normalizeSubnetPrefix(subnetPrefix);
+  const firstOctet = Number(cleanPrefix.split('.')[0]);
+  const ipClass = getIpClass(firstOctet);
+  const isPriv = isPrivateIp(`${cleanPrefix}.1`);
+
   const handleGenerate = () => {
     applyWizardTopology({
       archetype,
       projectName,
-      subnetPrefix,
+      subnetPrefix: cleanPrefix,
       clientCount,
       includeWifi,
       includeVoip,
@@ -189,14 +194,51 @@ export const NetworkWizardModal: React.FC = () => {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Text style={{ fontSize: 12, color: '#94a3b8' }}>IP NETWORK / SUBNET PREFIX (/24)</Text>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>IP NETWORK / SUBNET PREFIX (/24)</Text>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>Class {ipClass}</Tag>
+                  <Tag color={isPriv ? 'blue' : 'gold'} style={{ fontSize: 10, margin: 0 }}>
+                    {isPriv ? 'Private' : 'Public'}
+                  </Tag>
+                </div>
+              </div>
               <Input
                 value={subnetPrefix}
                 onChange={(e) => setSubnetPrefix(e.target.value)}
-                placeholder="192.168.10"
+                placeholder="e.g. 10.28.16, 172.16.10, 192.168.10, 213.180.45"
                 style={{ fontFamily: 'monospace', marginTop: 4 }}
                 addonAfter=".0/24"
               />
+              {/* Packet Tracer Subnet Presets */}
+              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 10.5, color: '#64748b' }}>Presets:</span>
+                {[
+                  { label: '10.28.16', desc: 'Class A Private' },
+                  { label: '172.16.10', desc: 'Class B Private' },
+                  { label: '192.168.10', desc: 'Class C Private' },
+                  { label: '213.180.45', desc: 'Class C Public' }
+                ].map(preset => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setSubnetPrefix(preset.label)}
+                    style={{
+                      background: cleanPrefix === preset.label ? '#0284c7' : '#1e293b',
+                      color: cleanPrefix === preset.label ? '#ffffff' : '#94a3b8',
+                      border: '1px solid #334155',
+                      borderRadius: 3,
+                      padding: '1px 6px',
+                      fontSize: 10.5,
+                      cursor: 'pointer',
+                      fontFamily: 'monospace'
+                    }}
+                    title={preset.desc}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </Col>
             <Col span={12}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -250,8 +292,9 @@ export const NetworkWizardModal: React.FC = () => {
             <Text strong style={{ color: '#38bdf8', fontSize: 15 }}>
               Ready to Synthesize: {archetypes.find(a => a.key === archetype)?.title}
             </Text>
-            <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12 }}>
-              <div><span style={{ color: '#64748b' }}>Network Subnet:</span> <span style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{subnetPrefix}.0/24</span></div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, flexWrap: 'wrap' }}>
+              <div><span style={{ color: '#64748b' }}>Network Subnet:</span> <span style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{cleanPrefix}.0/24</span></div>
+              <div><span style={{ color: '#64748b' }}>Class &amp; Scope:</span> <Tag color="cyan">Class {ipClass}</Tag><Tag color={isPriv ? 'blue' : 'gold'}>{isPriv ? 'Private' : 'Public'}</Tag></div>
               <div><span style={{ color: '#64748b' }}>Client Workstations:</span> <span style={{ color: '#f8fafc' }}>{clientCount} Devices</span></div>
               <div><span style={{ color: '#64748b' }}>WiFi 6 Active:</span> <Tag color={includeWifi ? 'green' : 'default'}>{includeWifi ? 'YES' : 'NO'}</Tag></div>
               <div><span style={{ color: '#64748b' }}>VoIP Telephony:</span> <Tag color={includeVoip ? 'green' : 'default'}>{includeVoip ? 'YES' : 'NO'}</Tag></div>

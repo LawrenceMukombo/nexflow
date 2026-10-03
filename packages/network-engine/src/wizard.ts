@@ -1,11 +1,12 @@
 import { EngineeringGraph } from '@omniflow/shared-types';
 import { createComponentInstance } from './components';
 import { createConnectionInstance } from './ports';
+import { normalizeSubnetPrefix } from './validation';
 
 export interface NetworkWizardOptions {
   archetype: 'BRANCH_OFFICE' | 'ENTERPRISE_CAMPUS' | 'DATA_CENTER' | 'SECURITY_CCTV' | 'INDUSTRIAL_IOT';
   projectName: string;
-  subnetPrefix: string; // e.g. "192.168.10" or "10.0.1"
+  subnetPrefix: string; // e.g. "192.168.10" or "10.0.1" or "213.180.45"
   clientCount: number;  // 2 - 24
   includeWifi: boolean;
   includeVoip: boolean;
@@ -14,7 +15,7 @@ export interface NetworkWizardOptions {
 
 export function generateWizardTopology(options: NetworkWizardOptions): EngineeringGraph {
   const designId = `design_wiz_${Date.now()}`;
-  const prefix = options.subnetPrefix || '192.168.10';
+  const prefix = normalizeSubnetPrefix(options.subnetPrefix);
   const nodes: Record<string, ReturnType<typeof createComponentInstance>> = {};
   const connections: Record<string, ReturnType<typeof createConnectionInstance>> = {};
 
